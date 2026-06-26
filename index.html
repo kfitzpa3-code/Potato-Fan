@@ -1512,16 +1512,36 @@ function loop(ts) {
 }
 requestAnimationFrame(loop);
 
-// ─── LEADERBOARD ──────────────────────────────────────────────────
-function getLeaderboard() { try { return JSON.parse(localStorage.getItem('potatofan_lb') || '[]'); } catch(e) { return []; } }
-function saveLeaderboard(lb) { localStorage.setItem('potatofan_lb', JSON.stringify(lb)); }
+// ─── SUPABASE ─────────────────────────────────────────────────────
+const SB_URL  = 'https://znmjzpvhetljucmohwpj.supabase.co';
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpubWp6cHZoZXRsanVjbW9od3BqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDA5MjEsImV4cCI6MjA5ODA3NjkyMX0.us-tgSJi8OdVIviXfLoNMNK9JwKOOLKSLEMR1h8tjdk';
+const SB_HDRS = { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+
+async function sbFetchLeaderboard() {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/leaderboard?select=name,score,created_at&order=score.desc&limit=10`, { headers: SB_HDRS });
+    if (!res.ok) throw new Error(res.status);
+    return await res.json();
+  } catch(e) { console.warn('Leaderboard fetch failed', e); return []; }
+}
+
+async function sbInsertScore(name, score) {
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/leaderboard`, {
+      method: 'POST',
+      headers: { ...SB_HDRS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ name, score })
+    });
+    if (!res.ok) throw new Error(await res.text());
+  } catch(e) { console.warn('Score save failed', e); }
+}
 
 // ─── GAME FLOW ────────────────────────────────────────────────────
 function startGame() {
   score = 0; potatoes = POTATO_COUNT; tomatoes = TOMATO_COUNT;
   selectedItem = 'potato'; projectiles = []; debris = []; floatingTexts = [];
   hitEffects = []; kitchenDamage = []; glassShards = []; fanSpeed = 0.03;
-  WIN.broken = false;
+  WIN.broken = false; WIN.crackLines = null;
   buildKitchen();
   updateScoreDisplay(); updateAmmoDisplay(); selectItem('potato');
   document.getElementById('hint').style.opacity = '1';
@@ -1544,12 +1564,12 @@ function showNameEntry() {
   setTimeout(() => document.getElementById('name-input').focus(), 300);
 }
 
-function saveScore() {
+async function saveScore() {
   const name = document.getElementById('name-input').value.trim() || 'Anonymous';
-  const lb = getLeaderboard();
-  lb.push({ name, score, date: new Date().toLocaleDateString() });
-  lb.sort((a,b) => b.score-a.score);
-  saveLeaderboard(lb.slice(0,10));
+  const btn = document.querySelector('#name-screen .btn');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+  await sbInsertScore(name, score);
+  btn.textContent = 'SAVE SCORE'; btn.disabled = false;
   showLeaderboard();
 }
 
@@ -1561,14 +1581,22 @@ function showMain() {
   document.getElementById('name-screen').style.display = 'none';
 }
 
-function showLeaderboard() {
+async function showLeaderboard() {
   document.getElementById('main-screen').style.display = 'none';
   document.getElementById('name-screen').style.display = 'none';
   document.getElementById('leaderboard-screen').style.display = 'block';
-  const lb = getLeaderboard();
   const el = document.getElementById('lb-list');
+  el.innerHTML = '<div class="lb-empty">Loading…</div>';
+  const lb = await sbFetchLeaderboard();
   if (lb.length === 0) { el.innerHTML = '<div class="lb-empty">No scores yet — be the first!</div>'; return; }
-  el.innerHTML = lb.map((e,i) => `<div class="lb-row"><span class="lb-rank">${['🥇','🥈','🥉'][i]||'#'+(i+1)}</span><span class="lb-name">${e.name}</span><span class="lb-pts">${e.score}</span></div>`).join('');
+  el.innerHTML = lb.map((e,i) => {
+    const date = new Date(e.created_at).toLocaleDateString();
+    return `<div class="lb-row">
+      <span class="lb-rank">${['🥇','🥈','🥉'][i]||'#'+(i+1)}</span>
+      <span class="lb-name">${e.name}</span>
+      <span class="lb-pts">${e.score}</span>
+    </div>`;
+  }).join('');
 }
 
 document.getElementById('name-input').addEventListener('keydown', e => { if (e.key==='Enter') saveScore(); });
