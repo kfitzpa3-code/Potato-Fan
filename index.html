@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Potato Fan</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a0e05;
+    font-family: 'Georgia', serif;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  canvas { display: block; }
+  #ui {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 12px 16px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .score-block {
+    background: rgba(20,10,2,0.75);
+    border: 1px solid rgba(210,150,80,0.4);
+    border-radius: 8px;
+    padding: 8px 14px;
+    text-align: center;
+  }
+  .score-label { font-size: 10px; color: #a07840; letter-spacing: 1px; text-transform: uppercase; }
+  .score-value { font-size: 22px; font-weight: bold; color: #f0c060; line-height: 1.1; }
+  #ammo-block { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .ammo-row { display: flex; gap: 4px; }
+  .ammo-pip { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid rgba(210,150,80,0.5); }
+  .pip-potato { background: #8B6914; }
+  .pip-tomato { background: #c0392b; }
+  .pip-used { background: transparent; border-color: rgba(210,150,80,0.2); }
+  #overlay {
+    position: fixed; inset: 0;
+    background: rgba(10,5,0,0.92);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 100; padding: 24px;
+  }
+  #overlay h1 { font-size: 42px; color: #f0c060; text-shadow: 0 2px 12px rgba(240,100,0,0.5); letter-spacing: -1px; margin-bottom: 4px; }
+  #overlay .subtitle { color: #a07840; font-size: 14px; letter-spacing: 2px; margin-bottom: 32px; }
+  .btn {
+    background: #8B3A10; color: #f0c060; border: 1.5px solid #c05020;
+    border-radius: 8px; font-family: 'Georgia', serif; font-size: 18px;
+    padding: 14px 40px; cursor: pointer; letter-spacing: 1px;
+    margin: 6px 0; width: 240px; transition: background 0.15s;
+  }
+  .btn:active { background: #a04010; }
+  .btn-secondary { background: transparent; color: #a07840; border-color: rgba(160,120,64,0.4); font-size: 15px; padding: 10px 40px; }
+  #leaderboard-screen { display: none; width: 100%; max-width: 340px; }
+  #leaderboard-screen h2 { color: #f0c060; font-size: 22px; text-align: center; margin-bottom: 16px; }
+  .lb-row { display: flex; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid rgba(160,120,64,0.15); color: #d4a040; font-size: 15px; }
+  .lb-row:first-child { border-top: 1px solid rgba(160,120,64,0.15); }
+  .lb-rank { color: #806030; width: 28px; }
+  .lb-name { flex: 1; }
+  .lb-pts { color: #f0c060; font-weight: bold; }
+  .lb-empty { text-align: center; color: #806030; padding: 24px; font-size: 14px; }
+  #name-screen { display: none; text-align: center; }
+  #name-screen p { color: #d4a040; font-size: 16px; margin-bottom: 8px; }
+  #name-screen .final-score { font-size: 36px; color: #f0c060; font-weight: bold; margin: 12px 0; }
+  #name-input {
+    background: rgba(20,10,2,0.8); border: 1.5px solid rgba(210,150,80,0.5);
+    border-radius: 8px; color: #f0c060; font-family: 'Georgia', serif;
+    font-size: 18px; padding: 12px 16px; width: 240px; text-align: center; margin: 12px 0; outline: none;
+  }
+  #name-input::placeholder { color: #806030; }
+  #hint {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    color: rgba(220,180,80,0.85); font-size: 14px; letter-spacing: 1px;
+    pointer-events: none; z-index: 10; transition: opacity 1s;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  }
+  #item-select {
+    position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 16px; z-index: 10;
+  }
+  .item-btn {
+    background: rgba(20,10,2,0.8); border: 2px solid rgba(210,150,80,0.3);
+    border-radius: 50%; width: 52px; height: 52px; font-size: 26px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: border-color 0.15s, transform 0.1s;
+  }
+  .item-btn.active { border-color: #f0c060; transform: scale(1.1); }
+  .item-btn.empty { opacity: 0.3; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div class="score-block">
+    <div class="score-label">Score</div>
+    <div class="score-value" id="score-display">0</div>
+  </div>
+  <div id="ammo-block"></div>
+</div>
+<div id="hint">Swipe up to throw</div>
+<div id="item-select">
+  <div class="item-btn active" id="btn-potato" onclick="selectItem('potato')">🥔</div>
+  <div class="item-btn" id="btn-tomato" onclick="selectItem('tomato')">🍅</div>
+</div>
+<div id="overlay">
+  <div id="main-screen">
+    <h1>🥔 Potato Fan</h1>
+    <div class="subtitle">KITCHEN CARNAGE</div>
+    <button class="btn" onclick="startGame()">PLAY</button>
+    <button class="btn btn-secondary" onclick="showLeaderboard()">LEADERBOARD</button>
+  </div>
+  <div id="leaderboard-screen">
+    <h2>🏆 Leaderboard</h2>
+    <div id="lb-list"></div>
+    <button class="btn btn-secondary" style="margin-top:20px;width:240px;" onclick="showMain()">← BACK</button>
+  </div>
+  <div id="name-screen">
+    <p>Round over!</p>
+    <div class="final-score" id="final-score-display">0 pts</div>
+    <p style="color:#a07840;font-size:13px;">Enter your name</p>
+    <input id="name-input" type="text" placeholder="Your name" maxlength="16" />
+    <button class="btn" onclick="saveScore()">SAVE SCORE</button>
+    <button class="btn btn-secondary" onclick="skipSave()">SKIP</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+// ─── AUDIO ENGINE ─────────────────────────────────────────────────
+let audioCtx = null;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playThud(x) {
+  try {
+    const ac = getAudio();
+    const buf = ac.createBuffer(1, ac.sampleRate * 0.25, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / ac.sampleRate;
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-t * 18) * 0.9
+               + Math.sin(2 * Math.PI * 80 * t) * Math.exp(-t * 12) * 0.5;
+    }
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.6, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.25);
+    // Pan based on x position
+    const pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    if (pan) { pan.pan.value = Math.max(-1, Math.min(1, (x / W) * 2 - 1)); src.connect(pan); pan.connect(gain); }
+    else src.connect(gain);
+    gain.connect(ac.destination);
+    src.start();
+  } catch(e) {}
+}
+
+function playCrash(x) {
+  try {
+    const ac = getAudio();
+    const dur = 0.4;
+    const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / ac.sampleRate;
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-t * 8) * 0.85
+               + Math.sin(2 * Math.PI * 200 * t) * Math.exp(-t * 15) * 0.3
+               + Math.sin(2 * Math.PI * 350 * t) * Math.exp(-t * 20) * 0.2;
+    }
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.8, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    const pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    if (pan) { pan.pan.value = Math.max(-1, Math.min(1, (x / W) * 2 - 1)); src.connect(pan); pan.connect(gain); }
+    else src.connect(gain);
+    gain.connect(ac.destination);
+    src.start();
+  } catch(e) {}
+}
+
+function playGlass(x) {
+  try {
+    const ac = getAudio();
+    // High-freq shards + low crack
+    for (let layer = 0; layer < 3; layer++) {
+      const dur = 0.6 + layer * 0.2;
+      const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+      const data = buf.getChannelData(0);
+      const baseFreq = [1200, 2400, 3800][layer];
+      for (let i = 0; i < data.length; i++) {
+        const t = i / ac.sampleRate;
+        data[i] = Math.sin(2 * Math.PI * baseFreq * t * (1 - t * 0.3))
+                  * (Math.random() * 0.4 + 0.6)
+                  * Math.exp(-t * (10 + layer * 4)) * 0.4;
+        if (i % 3 === 0) data[i] += (Math.random() * 2 - 1) * Math.exp(-t * 6) * 0.15;
+      }
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      const gain = ac.createGain();
+      gain.gain.setValueAtTime(0.5 - layer * 0.1, ac.currentTime + layer * 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur + layer * 0.03);
+      const pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
+      if (pan) { pan.pan.value = Math.max(-1, Math.min(1, (x / W) * 2 - 1)); src.connect(pan); pan.connect(gain); }
+      else src.connect(gain);
+      gain.connect(ac.destination);
+      src.start(ac.currentTime + layer * 0.03);
+    }
+  } catch(e) {}
+}
+
+function playFanHit() {
+  try {
+    const ac = getAudio();
+    // Metallic clang + wood thwack
+    const dur = 0.5;
+    const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / ac.sampleRate;
+      data[i] = Math.sin(2 * Math.PI * 420 * t) * Math.exp(-t * 10) * 0.6
+               + Math.sin(2 * Math.PI * 840 * t) * Math.exp(-t * 14) * 0.3
+               + (Math.random() * 2 - 1) * Math.exp(-t * 25) * 0.4;
+    }
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.7, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    gain.connect(ac.destination);
+    src.start();
+  } catch(e) {}
+}
+
+function playMetalBang(x) {
+  try {
+    const ac = getAudio();
+    const dur = 0.35;
+    const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / ac.sampleRate;
+      data[i] = Math.sin(2 * Math.PI * 180 * t) * Math.exp(-t * 12) * 0.7
+               + Math.sin(2 * Math.PI * 360 * t) * Math.exp(-t * 18) * 0.3
+               + (Math.random() * 2 - 1) * Math.exp(-t * 30) * 0.5;
+    }
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.75, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    const pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    if (pan) { pan.pan.value = Math.max(-1, Math.min(1, (x / W) * 2 - 1)); src.connect(pan); pan.connect(gain); }
+    else src.connect(gain);
+    gain.connect(ac.destination);
+    src.start();
+  } catch(e) {}
+}
+
+function playTomatoSplat(x) {
+  try {
+    const ac = getAudio();
+    const dur = 0.3;
+    const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / ac.sampleRate;
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-t * 20) * 0.5
+               + Math.sin(2 * Math.PI * 60 * t) * Math.exp(-t * 8) * 0.4;
+    }
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.6, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    const pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
+    if (pan) { pan.pan.value = Math.max(-1, Math.min(1, (x / W) * 2 - 1)); src.connect(pan); pan.connect(gain); }
+    else src.connect(gain);
+    gain.connect(ac.destination);
+    src.start();
+  } catch(e) {}
+}
+
+function playFloorBounce(x) {
+  try {
+    const ac = getAudio();
+    const dur = 0.15;
+    const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / ac.sampleRate;
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-t * 40) * 0.4
+               + Math.sin(2 * Math.PI * 100 * t) * Math.exp(-t * 25) * 0.3;
+    }
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.3, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    gain.connect(ac.destination);
+    src.start();
+  } catch(e) {}
+}
+
+// ─── GAME STATE ───────────────────────────────────────────────────
+const POTATO_COUNT = 10;
+const TOMATO_COUNT = 3;
+let score = 0;
+let potatoes = POTATO_COUNT;
+let tomatoes = TOMATO_COUNT;
+let selectedItem = 'potato';
+let gameActive = false;
+let projectiles = [];
+let debris = [];
+let floatingTexts = [];
+let fanAngle = 0;
+let fanSpeed = 0.03;
+let hitEffects = [];
+let kitchenDamage = [];
+let glassShards = [];    // window glass pieces
+let physicsItems = [];   // items knocked off counters with physics
+
+// Window bounds (set in drawKitchen, used globally)
+let WIN = { x:0, y:0, w:0, h:0, broken:false };
+
+// ─── KITCHEN OBJECTS ──────────────────────────────────────────────
+const kitchenItems = [];
+function buildKitchen() {
+  kitchenItems.length = 0;
+  // y positions adjusted to sit on 3D countertop (horizon - 0.06 = ~0.46)
+  const counterY = 0.50; // top of counter surface
+  const shelfY   = 0.41; // shelf
+  kitchenItems.push({ type:'jar',     x:0.04, y:counterY,   w:0.05, h:0.075, pts:8,  sound:'crash' });
+  kitchenItems.push({ type:'jar',     x:0.11, y:counterY,   w:0.05, h:0.082, pts:8,  sound:'crash' });
+  kitchenItems.push({ type:'plate',   x:0.70, y:shelfY,     w:0.09, h:0.04,  pts:12, sound:'crash' });
+  kitchenItems.push({ type:'plate',   x:0.82, y:shelfY-0.02,w:0.09, h:0.04,  pts:12, sound:'crash' });
+  kitchenItems.push({ type:'mug',     x:0.68, y:counterY,   w:0.065,h:0.07,  pts:10, sound:'crash' });
+  kitchenItems.push({ type:'pot',     x:0.57, y:counterY-0.01,w:0.11,h:0.09, pts:15, sound:'metal' });
+  kitchenItems.push({ type:'bowl',    x:0.28, y:counterY-0.01,w:0.13,h:0.065,pts:10, sound:'crash' });
+  kitchenItems.push({ type:'toaster', x:0.16, y:counterY,   w:0.10, h:0.07,  pts:20, sound:'metal' });
+  kitchenItems.push({ type:'clock',   x:0.43, y:0.14,       w:0.08, h:0.09,  pts:25, sound:'crash' });
+  kitchenItems.push({ type:'plant',   x:0.87, y:counterY-0.05,w:0.08,h:0.13, pts:5,  sound:'thud'  });
+  for (let item of kitchenItems) { item.hit = false; item.phys = null; }
+}
+buildKitchen();
+
+// ─── PHYSICS ITEMS ────────────────────────────────────────────────
+function knockItem(item, impactVx, impactVy) {
+  if (item.phys) return; // already in motion
+  // Convert from relative coords to pixel coords for physics
+  item.phys = {
+    px: item.x * W + (item.w * W) / 2,
+    py: item.y * H + (item.h * H) / 2,
+    vx: impactVx * (0.4 + Math.random() * 0.4),
+    vy: impactVy * (0.3 + Math.random() * 0.3) - 2,
+    angle: 0,
+    spin: (Math.random() - 0.5) * 0.18,
+    w: item.w * W,
+    h: item.h * H,
+    bounces: 0,
+    settled: false
+  };
+}
+
+function updatePhysicsItems() {
+  const floorY = H * 0.67;
+  for (let item of kitchenItems) {
+    const ph = item.phys;
+    if (!ph || ph.settled) continue;
+
+    ph.vx *= 0.985;
+    ph.vy += 0.35; // gravity
+    ph.px += ph.vx;
+    ph.py += ph.vy;
+    ph.angle += ph.spin;
+    ph.spin *= 0.96;
+
+    // Floor collision
+    if (ph.py + ph.h / 2 >= floorY) {
+      ph.py = floorY - ph.h / 2;
+      ph.vy *= -0.38;
+      ph.vx *= 0.72;
+      ph.spin *= 0.6;
+      ph.bounces++;
+      if (Math.abs(ph.vy) > 1.5) {
+        // Play bounce sound based on item sound type
+        if (item.sound === 'metal') playMetalBang(ph.px);
+        else if (item.sound === 'crash' && ph.bounces === 1) playCrash(ph.px);
+        else playFloorBounce(ph.px);
+      }
+      if (Math.abs(ph.vy) < 0.8 && Math.abs(ph.vx) < 0.5) {
+        ph.vy = 0; ph.vx *= 0.3; ph.spin *= 0.1;
+        if (Math.abs(ph.spin) < 0.005) { ph.spin = 0; ph.settled = true; }
+      }
+    }
+    // Wall collisions
+    if (ph.px - ph.w/2 < 0) { ph.px = ph.w/2; ph.vx = Math.abs(ph.vx) * 0.5; }
+    if (ph.px + ph.w/2 > W) { ph.px = W - ph.w/2; ph.vx = -Math.abs(ph.vx) * 0.5; }
+  }
+}
+
+// ─── GLASS SHARDS ─────────────────────────────────────────────────
+function smashWindow(ix, iy) {
+  if (WIN.broken) return;
+  WIN.broken = true;
+  playGlass(WIN.x + WIN.w / 2);
+  // Spawn many glass shards
+  for (let i = 0; i < 22; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const spd = 2 + Math.random() * 6;
+    glassShards.push({
+      x: WIN.x + Math.random() * WIN.w,
+      y: WIN.y + Math.random() * WIN.h,
+      vx: Math.cos(a) * spd,
+      vy: Math.sin(a) * spd - 2,
+      angle: Math.random() * Math.PI * 2,
+      spin: (Math.random() - 0.5) * 0.25,
+      size: 4 + Math.random() * 14,
+      life: 1,
+      alpha: 0.7 + Math.random() * 0.3
+    });
+  }
+}
+
+function updateGlassShards() {
+  const floorY = H * 0.67;
+  for (let s of glassShards) {
+    s.vx *= 0.97;
+    s.vy += 0.2;
+    s.x += s.vx;
+    s.y += s.vy;
+    s.angle += s.spin;
+    s.spin *= 0.97;
+    if (s.y > floorY) { s.y = floorY; s.vy *= -0.25; s.vx *= 0.7; }
+    s.life -= 0.004;
+  }
+  glassShards = glassShards.filter(s => s.life > 0);
+}
+
+function drawGlassShards() {
+  for (let s of glassShards) {
+    ctx.save();
+    ctx.globalAlpha = s.life * s.alpha;
+    ctx.translate(s.x, s.y);
+    ctx.rotate(s.angle);
+    ctx.fillStyle = 'rgba(180,220,255,0.7)';
+    ctx.strokeStyle = 'rgba(220,240,255,0.9)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    // Irregular triangle shard
+    ctx.moveTo(0, -s.size / 2);
+    ctx.lineTo(s.size * 0.4, s.size * 0.3);
+    ctx.lineTo(-s.size * 0.45, s.size * 0.25);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ─── DRAWING ──────────────────────────────────────────────────────
+
+// Perspective helpers — single vanishing point centre-top
+const VP = { x: 0.5, y: 0.38 }; // as fraction of W/H
+
+function vpX() { return VP.x * W; }
+function vpY() { return VP.y * H; }
+
+// Draw a quadrilateral face
+function quad(x1,y1,x2,y2,x3,y3,x4,y4, fillStyle) {
+  ctx.beginPath();
+  ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.lineTo(x3,y3); ctx.lineTo(x4,y4);
+  ctx.closePath();
+  ctx.fillStyle = fillStyle; ctx.fill();
+}
+
+function drawKitchen() {
+  const vx = vpX(), vy = vpY();
+  const horizon = H * 0.67; // where wall meets floor in perspective
+
+  // ── CEILING ──────────────────────────────────────────────────────
+  const ceilGrad = ctx.createLinearGradient(0, 0, 0, horizon * 0.35);
+  ceilGrad.addColorStop(0, '#d4c4a8');
+  ceilGrad.addColorStop(1, '#bfaa88');
+  ctx.fillStyle = ceilGrad;
+  ctx.fillRect(0, 0, W, horizon * 0.35);
+
+  // ── BACK WALL ────────────────────────────────────────────────────
+  const wallGrad = ctx.createLinearGradient(0, horizon * 0.3, 0, horizon);
+  wallGrad.addColorStop(0,   '#d6bc8c');
+  wallGrad.addColorStop(0.5, '#c8a870');
+  wallGrad.addColorStop(1,   '#b8955a');
+  ctx.fillStyle = wallGrad;
+  ctx.fillRect(0, horizon * 0.3, W, horizon * 0.72);
+
+  // Subtle wall panels / texture
+  ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+  ctx.lineWidth = 1;
+  for (let y = horizon * 0.35; y < horizon; y += H * 0.06) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Ambient occlusion along wall/floor join
+  const aoGrad = ctx.createLinearGradient(0, horizon - 18, 0, horizon + 10);
+  aoGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  aoGrad.addColorStop(1, 'rgba(0,0,0,0.22)');
+  ctx.fillStyle = aoGrad;
+  ctx.fillRect(0, horizon - 18, W, 28);
+
+  // ── PERSPECTIVE FLOOR ─────────────────────────────────────────────
+  // Base floor colour — gradient from horizon (lighter) to bottom (darker)
+  const floorGrad = ctx.createLinearGradient(0, horizon, 0, H);
+  floorGrad.addColorStop(0,   '#8a6b3a');
+  floorGrad.addColorStop(0.4, '#6e5228');
+  floorGrad.addColorStop(1,   '#4a3518');
+  ctx.fillStyle = floorGrad;
+  ctx.fillRect(0, horizon, W, H - horizon);
+
+  // Floor tile grid converging to vanishing point
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx.lineWidth = 1;
+
+  // Horizontal lines (parallel, evenly spaced in perspective)
+  const steps = 9;
+  for (let i = 1; i <= steps; i++) {
+    const t = Math.pow(i / steps, 1.7); // power curve = perspective compression
+    const y = horizon + (H - horizon) * t;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Vertical lines converging to VP
+  const cols = 12;
+  for (let i = 0; i <= cols; i++) {
+    const bx = (i / cols) * W; // position at bottom of screen
+    ctx.beginPath(); ctx.moveTo(vx, horizon); ctx.lineTo(bx, H); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Floor shine strip near horizon
+  const shineGrad = ctx.createLinearGradient(0, horizon, 0, horizon + H*0.06);
+  shineGrad.addColorStop(0,   'rgba(255,240,200,0.12)');
+  shineGrad.addColorStop(1,   'rgba(255,240,200,0)');
+  ctx.fillStyle = shineGrad;
+  ctx.fillRect(0, horizon, W, H*0.06);
+
+  // ── WINDOW ───────────────────────────────────────────────────────
+  const wx = W*0.52, wy = H*0.10, ww = W*0.30, wh = H*0.36;
+  WIN.x = wx; WIN.y = wy; WIN.w = ww; WIN.h = wh;
+
+  // Window recess (3D sill)
+  const sillDepth = 8;
+  ctx.fillStyle = '#a08048';
+  ctx.fillRect(wx - sillDepth, wy - sillDepth, ww + sillDepth*2, wh + sillDepth*2);
+  ctx.fillStyle = '#b09050';
+  // top face of sill
+  ctx.beginPath(); ctx.moveTo(wx-sillDepth, wy-sillDepth); ctx.lineTo(wx+ww+sillDepth, wy-sillDepth); ctx.lineTo(wx+ww, wy); ctx.lineTo(wx, wy); ctx.closePath(); ctx.fill();
+  // left face
+  ctx.fillStyle = '#907040';
+  ctx.beginPath(); ctx.moveTo(wx-sillDepth, wy-sillDepth); ctx.lineTo(wx, wy); ctx.lineTo(wx, wy+wh); ctx.lineTo(wx-sillDepth, wy+wh+sillDepth); ctx.closePath(); ctx.fill();
+
+  if (!WIN.broken) {
+    // Sky outside
+    const skyGrad = ctx.createLinearGradient(wx, wy, wx, wy+wh);
+    skyGrad.addColorStop(0, '#6ab0e0');
+    skyGrad.addColorStop(1, '#a8d4f0');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(wx, wy, ww, wh);
+    // Clouds
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    [[wx+ww*0.15, wy+wh*0.2, 22],[wx+ww*0.55, wy+wh*0.15, 18],[wx+ww*0.7, wy+wh*0.35, 14]].forEach(([cx,cy,r]) => {
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+r*0.7,cy,r*0.7,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx-r*0.6,cy,r*0.65,0,Math.PI*2); ctx.fill();
+    });
+    // Glass reflection
+    const glassGrad = ctx.createLinearGradient(wx, wy, wx+ww, wy+wh);
+    glassGrad.addColorStop(0,   'rgba(255,255,255,0.18)');
+    glassGrad.addColorStop(0.4, 'rgba(255,255,255,0)');
+    glassGrad.addColorStop(1,   'rgba(255,255,255,0.06)');
+    ctx.fillStyle = glassGrad;
+    ctx.fillRect(wx, wy, ww, wh);
+    // Window cross frame
+    ctx.strokeStyle = '#8a6030'; ctx.lineWidth = 5;
+    ctx.strokeRect(wx, wy, ww, wh);
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(wx+ww*0.5, wy); ctx.lineTo(wx+ww*0.5, wy+wh); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(wx, wy+wh*0.48); ctx.lineTo(wx+ww, wy+wh*0.48); ctx.stroke();
+  } else {
+    ctx.fillStyle = '#120d06';
+    ctx.fillRect(wx, wy, ww, wh);
+    // Static crack lines (stored so they don't flicker each frame)
+    if (!WIN.crackLines) {
+      WIN.crackLines = [];
+      const cx2 = wx + ww/2, cy2 = wy + wh/2;
+      for (let i = 0; i < 12; i++) {
+        const a = (i/12)*Math.PI*2 + 0.1;
+        const r1 = ww*0.12, r2 = ww*(0.3+Math.random()*0.3);
+        const jx = Math.cos(a)*r1 + (Math.random()-0.5)*8;
+        const jy = Math.sin(a)*r1 + (Math.random()-0.5)*8;
+        WIN.crackLines.push([cx2, cy2, cx2+jx, cy2+jy, cx2+Math.cos(a)*r2, cy2+Math.sin(a)*r2]);
+      }
+    }
+    ctx.strokeStyle = 'rgba(180,220,255,0.55)'; ctx.lineWidth = 1.5;
+    for (const [x1,y1,x2,y2,x3,y3] of WIN.crackLines) {
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.lineTo(x3,y3); ctx.stroke();
+    }
+    ctx.strokeStyle = '#8a6030'; ctx.lineWidth = 5;
+    ctx.strokeRect(wx, wy, ww, wh);
+  }
+
+  // Curtains with fabric folds
+  function drawCurtain(side) {
+    const dir = side === 'left' ? -1 : 1;
+    const ox = side === 'left' ? wx : wx+ww;
+    const cw = ww * 0.22;
+    const folds = 3;
+    ctx.save();
+    for (let f = 0; f < folds; f++) {
+      const fx = ox + dir * f * (cw/folds);
+      const shade = f % 2 === 0 ? '#8B1515' : '#a02020';
+      ctx.fillStyle = shade;
+      ctx.beginPath();
+      ctx.moveTo(fx, wy - 8);
+      ctx.quadraticCurveTo(fx + dir*(cw/folds)*0.5, wy+wh*0.5, fx, wy+wh+8);
+      ctx.lineTo(fx + dir*(cw/folds), wy+wh+8);
+      ctx.quadraticCurveTo(fx + dir*(cw/folds)*1.5, wy+wh*0.5, fx + dir*(cw/folds), wy-8);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Curtain rod
+    ctx.fillStyle = '#c89040';
+    ctx.fillRect(ox - (side==='left'?cw:0), wy-10, cw, 6);
+    ctx.restore();
+  }
+  drawCurtain('left'); drawCurtain('right');
+
+  // ── LEFT WALL CABINETS (3D) ───────────────────────────────────────
+  const cabX = 0, cabY = H*0.08, cabW = W*0.28, cabH = H*0.42;
+  const cabDepth = W*0.022;
+
+  // Cabinet body — front face with gradient
+  const cabGrad = ctx.createLinearGradient(cabX, cabY, cabX+cabW, cabY);
+  cabGrad.addColorStop(0,   '#a07040');
+  cabGrad.addColorStop(0.5, '#8a5e30');
+  cabGrad.addColorStop(1,   '#7a5028');
+  ctx.fillStyle = cabGrad;
+  ctx.fillRect(cabX, cabY, cabW, cabH);
+
+  // Cabinet top face (3D lid)
+  ctx.fillStyle = '#c09050';
+  ctx.beginPath();
+  ctx.moveTo(cabX, cabY);
+  ctx.lineTo(cabX+cabW, cabY);
+  ctx.lineTo(cabX+cabW+cabDepth, cabY - cabDepth*0.5);
+  ctx.lineTo(cabX+cabDepth, cabY - cabDepth*0.5);
+  ctx.closePath(); ctx.fill();
+
+  // Cabinet right side face
+  ctx.fillStyle = '#5a3818';
+  ctx.beginPath();
+  ctx.moveTo(cabX+cabW, cabY);
+  ctx.lineTo(cabX+cabW+cabDepth, cabY - cabDepth*0.5);
+  ctx.lineTo(cabX+cabW+cabDepth, cabY+cabH - cabDepth*0.5);
+  ctx.lineTo(cabX+cabW, cabY+cabH);
+  ctx.closePath(); ctx.fill();
+
+  // Door panels — inset with bevel
+  const panelColor = '#956838';
+  const panels = [
+    [W*0.02, H*0.10, W*0.11, H*0.14],
+    [W*0.15, H*0.10, W*0.11, H*0.14],
+    [W*0.02, H*0.27, W*0.11, H*0.12],
+    [W*0.15, H*0.27, W*0.11, H*0.12],
+    [W*0.02, H*0.41, W*0.11, H*0.07],
+    [W*0.15, H*0.41, W*0.11, H*0.07],
+  ];
+  for (const [px,py,pw,ph2] of panels) {
+    // Panel recess shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(px+2, py+2, pw, ph2);
+    ctx.fillStyle = panelColor;
+    ctx.fillRect(px, py, pw, ph2);
+    // Highlight top/left edges
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(px, py, pw, 2);
+    ctx.fillRect(px, py, 2, ph2);
+    // Shadow bottom/right edges
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(px, py+ph2-2, pw, 2);
+    ctx.fillRect(px+pw-2, py, 2, ph2);
+  }
+  // Handles — brass knobs
+  for (const [xi,yi] of [[W*0.075,H*0.165],[W*0.205,H*0.165],[W*0.075,H*0.33],[W*0.205,H*0.33],[W*0.075,H*0.445],[W*0.205,H*0.445]]) {
+    const hg = ctx.createRadialGradient(xi-2,yi-2,1, xi,yi,6);
+    hg.addColorStop(0,'#f0d060'); hg.addColorStop(1,'#a07020');
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(xi, yi, 5, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Cabinet bottom edge highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  ctx.fillRect(cabX, cabY+cabH-2, cabW, 2);
+
+  // ── COUNTERTOPS (3D) ─────────────────────────────────────────────
+  // Left counter
+  const ctY = horizon - H*0.06;
+  const ctH = H*0.055;
+  const ctDepth = H*0.03;
+
+  // Left counter body — front face
+  const ctGrad = ctx.createLinearGradient(0, ctY, 0, ctY+ctH);
+  ctGrad.addColorStop(0, '#8a6a3a');
+  ctGrad.addColorStop(1, '#6a4c22');
+  ctx.fillStyle = ctGrad;
+  ctx.fillRect(0, ctY, W*0.5, ctH);
+
+  // Left counter top face (lighter, slightly slanted for 3D)
+  const topGrad = ctx.createLinearGradient(0, ctY-ctDepth, 0, ctY);
+  topGrad.addColorStop(0, '#c8a060');
+  topGrad.addColorStop(1, '#a07840');
+  ctx.fillStyle = topGrad;
+  ctx.beginPath();
+  ctx.moveTo(0, ctY);
+  ctx.lineTo(W*0.5, ctY);
+  ctx.lineTo(W*0.5 + ctDepth*0.5, ctY - ctDepth);
+  ctx.lineTo(ctDepth*0.5, ctY - ctDepth);
+  ctx.closePath(); ctx.fill();
+  // Counter top edge highlight
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, ctY); ctx.lineTo(W*0.5, ctY); ctx.stroke();
+
+  // Left counter under-cabinet shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(0, ctY+ctH, W*0.5, 5);
+
+  // Right counter
+  const rc = W*0.56;
+  ctx.fillStyle = ctGrad;
+  ctx.fillRect(rc, ctY, W - rc, ctH);
+  ctx.fillStyle = topGrad;
+  ctx.beginPath();
+  ctx.moveTo(rc, ctY); ctx.lineTo(W, ctY);
+  ctx.lineTo(W, ctY - ctDepth); ctx.lineTo(rc + ctDepth*0.5, ctY - ctDepth);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(rc, ctY); ctx.lineTo(W, ctY); ctx.stroke();
+
+  // ── UPPER SHELF (right wall, 3D) ──────────────────────────────────
+  const shX = W*0.68, shY = H*0.44, shW = W*0.32, shD = H*0.018;
+  // Shelf top face
+  const shGrad = ctx.createLinearGradient(shX, shY-shD, shX, shY);
+  shGrad.addColorStop(0, '#b08840');
+  shGrad.addColorStop(1, '#8a6528');
+  ctx.fillStyle = shGrad;
+  ctx.beginPath();
+  ctx.moveTo(shX, shY); ctx.lineTo(shX+shW, shY);
+  ctx.lineTo(shX+shW, shY-shD); ctx.lineTo(shX, shY-shD);
+  ctx.closePath(); ctx.fill();
+  // Shelf front face
+  ctx.fillStyle = '#6a4c1a';
+  ctx.fillRect(shX, shY, shW, H*0.018);
+  // Shelf shadow below
+  const shShadow = ctx.createLinearGradient(shX, shY+H*0.018, shX, shY+H*0.045);
+  shShadow.addColorStop(0, 'rgba(0,0,0,0.2)');
+  shShadow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = shShadow;
+  ctx.fillRect(shX, shY+H*0.018, shW, H*0.027);
+
+  // Shelf brackets
+  for (const bx of [shX, shX+shW]) {
+    ctx.fillStyle = '#5a3c10';
+    ctx.beginPath();
+    ctx.moveTo(bx, shY+H*0.018);
+    ctx.lineTo(bx + (bx===shX?1:-1)*W*0.012, shY+H*0.07);
+    ctx.lineTo(bx + (bx===shX?1:-1)*W*0.012, shY+H*0.075);
+    ctx.lineTo(bx, shY+H*0.022);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // ── WALL TRIM / BASEBOARD ─────────────────────────────────────────
+  // Ceiling cornice
+  const corniceGrad = ctx.createLinearGradient(0, 0, 0, H*0.04);
+  corniceGrad.addColorStop(0, '#e8d8b8');
+  corniceGrad.addColorStop(1, '#c8b888');
+  ctx.fillStyle = corniceGrad;
+  ctx.fillRect(0, 0, W, H*0.05);
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.fillRect(0, H*0.038, W, 4);
+
+  // Baseboard at floor/wall join
+  ctx.fillStyle = '#c8b080';
+  ctx.fillRect(0, horizon - H*0.018, W, H*0.018);
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.fillRect(0, horizon - H*0.018, W, 2);
+
+  // ── WINDOW LIGHT CAST ON FLOOR ────────────────────────────────────
+  if (!WIN.broken) {
+    ctx.save();
+    const lx = WIN.x + WIN.w*0.5;
+    const lightGrad = ctx.createRadialGradient(lx, horizon, 10, lx, H*0.8, W*0.45);
+    lightGrad.addColorStop(0,   'rgba(255,240,190,0.18)');
+    lightGrad.addColorStop(0.5, 'rgba(255,220,160,0.07)');
+    lightGrad.addColorStop(1,   'rgba(255,220,160,0)');
+    ctx.fillStyle = lightGrad;
+    ctx.fillRect(0, horizon, W, H - horizon);
+    ctx.restore();
+  }
+}
+
+function drawItem(item) {
+  const ph = item.phys;
+  let x, y, w, h;
+  if (ph) {
+    w = ph.w; h = ph.h;
+    x = ph.px - w/2; y = ph.py - h/2;
+  } else {
+    x = item.x*W; y = item.y*H; w = item.w*W; h = item.h*H;
+  }
+  const cx = x + w/2, cy = y + h/2;
+
+  ctx.save();
+  if (ph) {
+    ctx.translate(ph.px, ph.py);
+    ctx.rotate(ph.angle);
+    ctx.translate(-ph.px, -ph.py);
+  }
+  if (item.hit && !ph) ctx.globalAlpha = 0.55;
+
+  const sd = w * 0.12; // side depth for 3D face
+
+  switch (item.type) {
+
+    case 'jar': {
+      // Front face
+      const jg = ctx.createLinearGradient(x, y, x+w, y);
+      jg.addColorStop(0,   item.hit ? '#444' : '#3a6a2a');
+      jg.addColorStop(0.4, item.hit ? '#666' : '#5a9a3a');
+      jg.addColorStop(1,   item.hit ? '#333' : '#2a5020');
+      ctx.fillStyle = jg; ctx.fillRect(x, y+h*0.12, w, h*0.88);
+      // Glass label area
+      if (!item.hit) {
+        ctx.fillStyle = 'rgba(180,220,160,0.5)';
+        ctx.fillRect(x+w*0.1, y+h*0.2, w*0.8, h*0.5);
+        ctx.fillStyle = '#5a3010'; ctx.font = `bold ${Math.floor(h*0.22)}px Georgia`;
+        ctx.textAlign = 'center'; ctx.fillText('JAR', cx, y+h*0.52);
+      }
+      // Metal lid — top face
+      const lidG = ctx.createLinearGradient(x, y, x+w, y+h*0.14);
+      lidG.addColorStop(0,'#d0a040'); lidG.addColorStop(0.5,'#f0c860'); lidG.addColorStop(1,'#a07020');
+      ctx.fillStyle = lidG; ctx.fillRect(x-2, y, w+4, h*0.14);
+      // Lid top shine
+      ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(x, y, w, h*0.05);
+      // Side shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x+w-sd*0.5, y+h*0.12, sd*0.5, h*0.88);
+      break;
+    }
+
+    case 'plate': {
+      // Shadow under plate
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      ctx.beginPath(); ctx.ellipse(cx, y+h+3, w*0.45, h*0.25, 0, 0, Math.PI*2); ctx.fill();
+      // Plate body — ellipse (seen slightly from above)
+      const pg = ctx.createRadialGradient(cx-w*0.1, cy-h*0.1, w*0.05, cx, cy, w*0.55);
+      pg.addColorStop(0, item.hit ? '#ccc' : '#f4eedd');
+      pg.addColorStop(0.7, item.hit ? '#aaa' : '#e0d0b0');
+      pg.addColorStop(1,   item.hit ? '#888' : '#c8b888');
+      ctx.fillStyle = pg;
+      ctx.beginPath(); ctx.ellipse(cx, cy, w*0.5, h*0.48, 0, 0, Math.PI*2); ctx.fill();
+      // Inner ring
+      ctx.strokeStyle = item.hit ? '#999' : '#c8b070'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(cx, cy, w*0.3, h*0.28, 0, 0, Math.PI*2); ctx.stroke();
+      // Rim highlight
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(cx-w*0.05, cy-h*0.05, w*0.42, h*0.4, -0.3, Math.PI*1.1, Math.PI*1.6); ctx.stroke();
+      if (item.hit) {
+        ctx.strokeStyle = 'rgba(100,80,60,0.7)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(cx-w*0.1, cy-h*0.4); ctx.lineTo(cx+w*0.05, cy+h*0.45); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx+w*0.2, cy-h*0.3); ctx.lineTo(cx-w*0.1, cy+h*0.4); ctx.stroke();
+      }
+      break;
+    }
+
+    case 'mug': {
+      const mug_c = item.hit ? '#666' : '#3a5a8a';
+      // Side face
+      ctx.fillStyle = item.hit ? '#444' : '#2a4070';
+      ctx.fillRect(x+w*0.8, y+h*0.12, sd*0.7, h*0.88);
+      // Front face gradient
+      const mg = ctx.createLinearGradient(x, y, x+w, y);
+      mg.addColorStop(0,   item.hit ? '#555' : '#2c4878');
+      mg.addColorStop(0.3, item.hit ? '#888' : '#4a6aaa');
+      mg.addColorStop(1,   item.hit ? '#555' : '#2a4070');
+      ctx.fillStyle = mg; ctx.fillRect(x, y+h*0.12, w*0.82, h*0.88);
+      // Rim (top) ellipse
+      const rimG = ctx.createLinearGradient(x, y+h*0.08, x, y+h*0.18);
+      rimG.addColorStop(0,'#6a8aaa'); rimG.addColorStop(1,'#3a5a8a');
+      ctx.fillStyle = rimG;
+      ctx.beginPath(); ctx.ellipse(x+w*0.41, y+h*0.12, w*0.41, h*0.1, 0, 0, Math.PI*2); ctx.fill();
+      // Handle
+      ctx.strokeStyle = item.hit ? '#555' : '#2a4070'; ctx.lineWidth = h*0.1;
+      ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.arc(x+w*0.9, y+h*0.45, h*0.22, -0.6, Math.PI*0.6); ctx.stroke();
+      // Coffee surface
+      if (!item.hit) {
+        ctx.fillStyle = '#3a1800';
+        ctx.beginPath(); ctx.ellipse(x+w*0.41, y+h*0.12, w*0.36, h*0.08, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,200,150,0.15)';
+        ctx.beginPath(); ctx.ellipse(x+w*0.35, y+h*0.1, w*0.12, h*0.04, -0.3, 0, Math.PI*2); ctx.fill();
+      }
+      break;
+    }
+
+    case 'pot': {
+      // Side face (darker)
+      ctx.fillStyle = '#1a1a1a'; ctx.fillRect(x+w*0.88, y+h*0.2, sd*0.7, h*0.8);
+      // Body gradient
+      const potG = ctx.createLinearGradient(x, y, x+w, y);
+      potG.addColorStop(0,   item.hit ? '#666' : '#303030');
+      potG.addColorStop(0.35,item.hit ? '#999' : '#505050');
+      potG.addColorStop(1,   item.hit ? '#555' : '#252525');
+      ctx.fillStyle = potG; ctx.fillRect(x+w*0.04, y+h*0.22, w*0.84, h*0.78);
+      // Handles (sides)
+      ctx.fillStyle = '#404040';
+      ctx.fillRect(x-w*0.04, y+h*0.28, w*0.1, h*0.12);
+      ctx.fillRect(x+w*0.94, y+h*0.28, w*0.1, h*0.12);
+      // Lid
+      const lidPG = ctx.createLinearGradient(x, y+h*0.12, x, y+h*0.22);
+      lidPG.addColorStop(0, '#505050'); lidPG.addColorStop(1,'#2a2a2a');
+      ctx.fillStyle = lidPG; ctx.fillRect(x+w*0.08, y+h*0.12, w*0.84, h*0.12);
+      // Lid knob
+      ctx.fillStyle = '#606060';
+      ctx.beginPath(); ctx.arc(cx, y+h*0.12, w*0.07, 0, Math.PI*2); ctx.fill();
+      // Rim highlight
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x+w*0.04, y+h*0.22); ctx.lineTo(x+w*0.88, y+h*0.22); ctx.stroke();
+      break;
+    }
+
+    case 'bowl': {
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.beginPath(); ctx.ellipse(cx, y+h+2, w*0.45, h*0.2, 0, 0, Math.PI*2); ctx.fill();
+      // Bowl body
+      const bowlG = ctx.createRadialGradient(cx-w*0.1, cy, w*0.1, cx, cy, w*0.55);
+      bowlG.addColorStop(0, item.hit ? '#bbb' : '#e09060');
+      bowlG.addColorStop(1, item.hit ? '#888' : '#b06030');
+      ctx.fillStyle = bowlG;
+      ctx.beginPath(); ctx.ellipse(cx, y+h*0.65, w*0.5, h*0.45, 0, 0, Math.PI); ctx.fill();
+      // Rim (top ellipse)
+      ctx.fillStyle = item.hit ? '#aaa' : '#d4824a';
+      ctx.beginPath(); ctx.ellipse(cx, y+h*0.18, w*0.5, h*0.2, 0, 0, Math.PI*2); ctx.fill();
+      // Inner rim dark
+      ctx.fillStyle = item.hit ? '#888' : '#a06030';
+      ctx.beginPath(); ctx.ellipse(cx, y+h*0.18, w*0.38, h*0.13, 0, 0, Math.PI*2); ctx.fill();
+      // Fruit
+      if (!item.hit) {
+        ctx.font = `${Math.floor(w*0.32)}px serif`; ctx.textAlign = 'center';
+        ctx.fillText('🍋', cx-w*0.18, y+h*0.28);
+        ctx.fillText('🍊', cx+w*0.12, y+h*0.22);
+      }
+      break;
+    }
+
+    case 'toaster': {
+      // Side face
+      ctx.fillStyle = '#888060'; ctx.fillRect(x+w, y+h*0.28, sd*0.6, h*0.72);
+      // Top face
+      const tTopG = ctx.createLinearGradient(x, y+h*0.1, x, y+h*0.3);
+      tTopG.addColorStop(0,'#e0d090'); tTopG.addColorStop(1,'#b8a860');
+      ctx.fillStyle = tTopG; ctx.fillRect(x, y+h*0.1, w+sd*0.3, h*0.2);
+      // Body
+      const tG = ctx.createLinearGradient(x, y, x+w, y);
+      tG.addColorStop(0,   item.hit ? '#777' : '#b0a070');
+      tG.addColorStop(0.4, item.hit ? '#aaa' : '#d8c890');
+      tG.addColorStop(1,   item.hit ? '#666' : '#989060');
+      ctx.fillStyle = tG; ctx.fillRect(x, y+h*0.28, w, h*0.72);
+      // Slots
+      ctx.fillStyle = '#1a1a12';
+      ctx.fillRect(x+w*0.18, y+h*0.06, w*0.26, h*0.26);
+      ctx.fillRect(x+w*0.52, y+h*0.06, w*0.26, h*0.26);
+      // Slot highlight
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1;
+      ctx.strokeRect(x+w*0.18, y+h*0.06, w*0.26, h*0.26);
+      ctx.strokeRect(x+w*0.52, y+h*0.06, w*0.26, h*0.26);
+      // Lever
+      ctx.fillStyle = '#606050'; ctx.fillRect(x+w*0.85, y+h*0.45, w*0.08, h*0.35);
+      ctx.fillStyle = '#404030'; ctx.fillRect(x+w*0.83, y+h*0.6, w*0.12, h*0.08);
+      break;
+    }
+
+    case 'clock': {
+      const r = Math.min(w, h) * 0.46;
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      ctx.beginPath(); ctx.ellipse(cx+4, cy+4, r, r, 0, 0, Math.PI*2); ctx.fill();
+      // Clock frame
+      const frameG = ctx.createRadialGradient(cx-r*0.3, cy-r*0.3, r*0.1, cx, cy, r*1.1);
+      frameG.addColorStop(0, item.hit ? '#aaa' : '#c8a858');
+      frameG.addColorStop(0.7,item.hit ? '#888' : '#a07830');
+      frameG.addColorStop(1,  item.hit ? '#666' : '#7a5820');
+      ctx.fillStyle = frameG;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+      // Clock face
+      const faceG = ctx.createRadialGradient(cx-r*0.2, cy-r*0.2, r*0.05, cx, cy, r*0.85);
+      faceG.addColorStop(0, item.hit ? '#ddd' : '#f8f0d8');
+      faceG.addColorStop(1, item.hit ? '#bbb' : '#e0cca0');
+      ctx.fillStyle = faceG;
+      ctx.beginPath(); ctx.arc(cx, cy, r*0.82, 0, Math.PI*2); ctx.fill();
+      // Hour markers
+      if (!item.hit) {
+        ctx.fillStyle = '#5a3a10';
+        for (let i = 0; i < 12; i++) {
+          const a = (i/12)*Math.PI*2 - Math.PI/2;
+          const mr = r*0.7; const ml = i%3===0 ? r*0.12 : r*0.07;
+          ctx.fillRect(cx + Math.cos(a)*mr - 1.5, cy + Math.sin(a)*mr - ml/2, 3, ml);
+        }
+        // Hands
+        ctx.strokeStyle = '#2a1a08'; ctx.lineCap = 'round';
+        ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx+Math.cos(-1.2)*r*0.5, cy+Math.sin(-1.2)*r*0.5); ctx.stroke();
+        ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx+Math.cos(0.8)*r*0.68, cy+Math.sin(0.8)*r*0.68); ctx.stroke();
+        ctx.fillStyle = '#c03010'; ctx.beginPath(); ctx.arc(cx, cy, r*0.06, 0, Math.PI*2); ctx.fill();
+      }
+      // Glass sheen
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.beginPath(); ctx.arc(cx-r*0.15, cy-r*0.2, r*0.55, Math.PI*1.15, Math.PI*1.75); ctx.fill();
+      break;
+    }
+
+    case 'plant': {
+      // Pot — side face
+      ctx.fillStyle = '#6a3810'; ctx.fillRect(x+w*0.7, y+h*0.55, sd*0.5, h*0.45);
+      // Pot body
+      const potPlG = ctx.createLinearGradient(x+w*0.2, y, x+w*0.8, y);
+      potPlG.addColorStop(0,'#5a2808'); potPlG.addColorStop(0.4,'#8a4820'); potPlG.addColorStop(1,'#5a2808');
+      ctx.fillStyle = potPlG;
+      ctx.beginPath();
+      ctx.moveTo(x+w*0.18, y+h*0.58); ctx.lineTo(x+w*0.25, y+h); ctx.lineTo(x+w*0.75, y+h); ctx.lineTo(x+w*0.82, y+h*0.58);
+      ctx.closePath(); ctx.fill();
+      // Pot rim
+      ctx.fillStyle = '#a06030';
+      ctx.beginPath(); ctx.ellipse(cx, y+h*0.58, w*0.34, h*0.1, 0, 0, Math.PI*2); ctx.fill();
+      // Soil
+      ctx.fillStyle = '#3a2010';
+      ctx.beginPath(); ctx.ellipse(cx, y+h*0.58, w*0.28, h*0.08, 0, 0, Math.PI*2); ctx.fill();
+      if (!item.hit) {
+        // Leaves with gradient
+        const leafColors = ['#2a7a2a','#3a9a2a','#1a6a1a'];
+        const leafPos = [[cx, y+h*0.35, w*0.38],[cx-w*0.22, y+h*0.48, w*0.26],[cx+w*0.22, y+h*0.46, w*0.26]];
+        leafPos.forEach(([lx,ly,lr],i) => {
+          const lg = ctx.createRadialGradient(lx-lr*0.2, ly-lr*0.2, lr*0.1, lx, ly, lr*0.5);
+          lg.addColorStop(0, '#4aaa2a'); lg.addColorStop(1, leafColors[i]);
+          ctx.fillStyle = lg;
+          ctx.beginPath(); ctx.arc(lx, ly, lr*0.5, 0, Math.PI*2); ctx.fill();
+        });
+      } else {
+        ctx.fillStyle = '#6a7a3a'; ctx.fillRect(x, y+h*0.3, w, h*0.28);
+      }
+      break;
+    }
+  }
+  ctx.restore();
+}
+
+function drawFan() {
+  const cx = W * 0.5, cy = H * 0.10;
+  const bladeSpan = W * 0.36;
+
+  // Drop shadow on ceiling
+  const shadowG = ctx.createRadialGradient(cx, cy+10, 5, cx, cy+10, bladeSpan*0.9);
+  shadowG.addColorStop(0,   'rgba(0,0,0,0.22)');
+  shadowG.addColorStop(0.4, 'rgba(0,0,0,0.1)');
+  shadowG.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = shadowG;
+  ctx.beginPath(); ctx.ellipse(cx, cy+14, bladeSpan*0.85, bladeSpan*0.18, 0, 0, Math.PI*2); ctx.fill();
+
+  // Downrod
+  const rodG = ctx.createLinearGradient(cx-6, 0, cx+6, 0);
+  rodG.addColorStop(0,'#7a5a28'); rodG.addColorStop(0.4,'#c8a040'); rodG.addColorStop(1,'#5a3a10');
+  ctx.fillStyle = rodG; ctx.fillRect(cx - 5, 0, 10, cy - 14);
+
+  // Canopy
+  const canG = ctx.createRadialGradient(cx-8, 4, 2, cx, 8, 28);
+  canG.addColorStop(0,'#e0b040'); canG.addColorStop(1,'#7a5020');
+  ctx.fillStyle = canG;
+  ctx.beginPath(); ctx.ellipse(cx, 8, 24, 10, 0, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#5a3a10'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // Motor housing back circle (shadow face)
+  ctx.fillStyle = '#2a1808';
+  ctx.beginPath(); ctx.ellipse(cx+3, cy+3, 26, 17, 0, 0, Math.PI*2); ctx.fill();
+
+  // Fan blades with 3D perspective
+  for (let i = 0; i < 4; i++) {
+    const a = fanAngle + i * Math.PI / 2;
+    const cosA = Math.cos(a), sinA = Math.sin(a);
+    const extend = cosA;
+    const thickness = Math.abs(sinA) * 12 + 2;
+    if (Math.abs(extend) < 0.04) continue;
+    const tipX = cx + extend * bladeSpan;
+    const tipY = cy + sinA * 10;
+    const hw = 12, tw = Math.max(2, 7 * Math.abs(extend));
+
+    ctx.save();
+    // Blade shadow offset
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath();
+    ctx.moveTo(cx + (extend > 0 ? hw : -hw) + 3, cy - thickness/2 + 5);
+    ctx.lineTo(tipX + 3, tipY - tw/2 + 5);
+    ctx.lineTo(tipX + 3, tipY + tw/2 + 5);
+    ctx.lineTo(cx + (extend > 0 ? hw : -hw) + 3, cy + thickness/2 + 5);
+    ctx.closePath(); ctx.fill();
+
+    // Blade face with wood-grain gradient
+    const bladeG = ctx.createLinearGradient(cx, cy-thickness/2, tipX, tipY);
+    const light = Math.floor(155 + cosA * 40);
+    bladeG.addColorStop(0,   `rgba(${light+20},${Math.floor((light+20)*0.75)},${Math.floor((light+20)*0.28)},1)`);
+    bladeG.addColorStop(0.5, `rgba(${light},${Math.floor(light*0.72)},${Math.floor(light*0.25)},1)`);
+    bladeG.addColorStop(1,   `rgba(${light-30},${Math.floor((light-30)*0.7)},${Math.floor((light-30)*0.22)},1)`);
+    ctx.fillStyle = bladeG;
+    ctx.beginPath();
+    ctx.moveTo(cx + (extend > 0 ? hw : -hw), cy - thickness/2);
+    ctx.lineTo(tipX, tipY - tw/2);
+    ctx.lineTo(tipX, tipY + tw/2);
+    ctx.lineTo(cx + (extend > 0 ? hw : -hw), cy + thickness/2);
+    ctx.closePath(); ctx.fill();
+
+    // Edge stroke
+    ctx.strokeStyle = 'rgba(80,50,10,0.5)'; ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Wood grain lines
+    for (let g = 1; g <= 2; g++) {
+      ctx.strokeStyle = `rgba(0,0,0,${0.08 * g})`;
+      ctx.lineWidth = 0.8;
+      const t = g / 3;
+      ctx.beginPath();
+      ctx.moveTo(cx + (extend>0?hw:-hw), cy - thickness/2 + thickness*t);
+      ctx.lineTo(tipX*(0.96)+cx*0.04, tipY - tw/2 + tw*t);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Motor housing front (layered for depth)
+  const mhG = ctx.createRadialGradient(cx-6, cy-5, 3, cx, cy, 26);
+  mhG.addColorStop(0,   '#8a6030');
+  mhG.addColorStop(0.5, '#5a3818');
+  mhG.addColorStop(1,   '#2a1408');
+  ctx.fillStyle = mhG;
+  ctx.beginPath(); ctx.ellipse(cx, cy, 24, 16, 0, 0, Math.PI*2); ctx.fill();
+  // Inner ring
+  const innerG = ctx.createRadialGradient(cx-4, cy-4, 2, cx, cy, 14);
+  innerG.addColorStop(0,'#c8a040'); innerG.addColorStop(1,'#7a5020');
+  ctx.fillStyle = innerG;
+  ctx.beginPath(); ctx.ellipse(cx, cy, 13, 9, 0, 0, Math.PI*2); ctx.fill();
+  // Center bolt
+  ctx.fillStyle = '#e0c050';
+  ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#f0d860';
+  ctx.beginPath(); ctx.arc(cx-1.5, cy-1.5, 2.5, 0, Math.PI*2); ctx.fill();
+}
+
+function drawForeground() {
+  // Foreground counter edge — the surface the player is throwing from
+  const fgY = H * 0.76;
+  // Counter top surface
+  const fgGrad = ctx.createLinearGradient(0, fgY - H*0.025, 0, fgY);
+  fgGrad.addColorStop(0, '#d4a858');
+  fgGrad.addColorStop(1, '#b08838');
+  ctx.fillStyle = fgGrad;
+  ctx.fillRect(0, fgY - H*0.025, W, H*0.025);
+
+  // Counter face (front panel)
+  const faceGrad = ctx.createLinearGradient(0, fgY, 0, H);
+  faceGrad.addColorStop(0, '#7a5828');
+  faceGrad.addColorStop(0.3, '#6a4c20');
+  faceGrad.addColorStop(1, '#3a2810');
+  ctx.fillStyle = faceGrad;
+  ctx.fillRect(0, fgY, W, H - fgY);
+
+  // Top edge highlight
+  ctx.strokeStyle = 'rgba(255,230,150,0.35)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, fgY - H*0.025); ctx.lineTo(W, fgY - H*0.025); ctx.stroke();
+
+  // Subtle vignette on counter face
+  const vigGrad = ctx.createLinearGradient(0, fgY, 0, H);
+  vigGrad.addColorStop(0,   'rgba(0,0,0,0)');
+  vigGrad.addColorStop(1,   'rgba(0,0,0,0.45)');
+  ctx.fillStyle = vigGrad;
+  ctx.fillRect(0, fgY, W, H - fgY);
+
+  // Swipe arrow hint — only show at start
+  // (hint text rendered by DOM, this just adds a subtle arc)
+}
+
+function drawProjectile(p) {
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.angle);
+  if (p.type === 'potato') {
+    ctx.fillStyle = '#8B6914';
+    ctx.beginPath(); ctx.ellipse(0, 0, p.r*1.3, p.r, 0.3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#7a5510'; ctx.fillRect(-3, -2, 6, 4);
+  } else {
+    ctx.fillStyle = '#c0392b';
+    ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath(); ctx.arc(-p.r*0.25, -p.r*0.25, p.r*0.35, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#e74c3c'; ctx.font = `${p.r*1.2}px serif`; ctx.textAlign = 'center'; ctx.fillText('🍅', 0, p.r*0.4);
+  }
+  ctx.restore();
+}
+
+function drawDebris() {
+  for (let d of debris) {
+    ctx.save(); ctx.globalAlpha = d.life;
+    ctx.translate(d.x, d.y); ctx.rotate(d.angle);
+    if (d.isTomato) { ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(0, 0, d.r, 0, Math.PI*2); ctx.fill(); }
+    else { ctx.fillStyle = '#8B6914'; ctx.beginPath(); ctx.ellipse(0, 0, d.r*1.2, d.r*0.8, 0, 0, Math.PI*2); ctx.fill(); }
+    ctx.restore();
+  }
+}
+
+function drawHitEffects() {
+  for (let e of hitEffects) {
+    ctx.save(); ctx.globalAlpha = e.life * 0.7;
+    ctx.strokeStyle = e.isTomato ? '#e74c3c' : '#f0c060'; ctx.lineWidth = 3;
+    const r = (1 - e.life) * 60;
+    ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, Math.PI*2); ctx.stroke();
+    if (e.isTomato) {
+      for (let i = 0; i < 6; i++) {
+        const a = (i/6)*Math.PI*2 + e.life*2, dr = r*1.3;
+        ctx.fillStyle = '#c0392b';
+        ctx.beginPath(); ctx.arc(e.x+Math.cos(a)*dr, e.y+Math.sin(a)*dr, 4*(1-e.life*0.5), 0, Math.PI*2); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+}
+
+function drawFloatingTexts() {
+  for (let t of floatingTexts) {
+    ctx.save(); ctx.globalAlpha = t.life;
+    ctx.fillStyle = t.color || '#f0c060';
+    ctx.font = `bold ${t.size||20}px Georgia`;
+    ctx.textAlign = 'center';
+    ctx.fillText(t.text, t.x, t.y);
+    ctx.restore();
+  }
+}
+
+function drawKitchenDamage() {
+  for (let d of kitchenDamage) {
+    ctx.save(); ctx.globalAlpha = 0.7;
+    if (d.isTomato) {
+      ctx.fillStyle = '#8B1a1a';
+      ctx.beginPath();
+      for (let i = 0; i < d.pts.length; i++) i===0 ? ctx.moveTo(d.pts[i][0], d.pts[i][1]) : ctx.lineTo(d.pts[i][0], d.pts[i][1]);
+      ctx.closePath(); ctx.fill();
+    } else {
+      ctx.fillStyle = '#4a3010';
+      ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) {
+        const a = d.angle + i * Math.PI/2 + 0.3;
+        ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + Math.cos(a)*d.r*1.5, d.y + Math.sin(a)*d.r*1.5); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+}
+
+// ─── PHYSICS ──────────────────────────────────────────────────────
+function updateProjectile(p) {
+  p.vx *= 0.995;
+  p.vy += 0.25;
+  p.x += p.vx;
+  p.y += p.vy;
+  p.angle += p.spin;
+
+  // Fan collision
+  const fcx = W*0.5, fcy = H*0.10;
+  const bladeSpan = W * 0.36;
+  for (let i = 0; i < 4; i++) {
+    const ba = fanAngle + i * Math.PI/2;
+    const cosA = Math.cos(ba);
+    if (Math.abs(cosA) < 0.15) continue;
+    const tipX = fcx + cosA * bladeSpan;
+    const tipY = fcy + Math.sin(ba) * 8;
+    for (let s = 1; s <= 6; s++) {
+      const t = s/6;
+      const bx = fcx + (tipX-fcx)*t, by = fcy + (tipY-fcy)*t;
+      const dx = p.x - bx, dy = p.y - by;
+      if (Math.sqrt(dx*dx+dy*dy) < p.r + 9) {
+        const spd = Math.sqrt(p.vx*p.vx+p.vy*p.vy) * 1.5;
+        p.vx = cosA * spd * (0.6 + Math.random()*0.6);
+        p.vy = -(Math.abs(p.vy) * 0.4 + 3 + Math.random()*3);
+        p.spin = cosA * (0.3 + Math.random()*0.3);
+        fanSpeed = Math.min(0.09, fanSpeed + 0.02);
+        playFanHit();
+        spawnHit(p.x, p.y, p.type==='tomato');
+        return false;
+      }
+    }
+  }
+  const dist = Math.sqrt((p.x-fcx)**2 + (p.y-fcy)**2);
+  if (dist < 24 + p.r) {
+    p.vx *= -0.8; p.vy = -Math.abs(p.vy)*0.7;
+    playFanHit();
+    spawnHit(p.x, p.y, p.type==='tomato');
+  }
+
+  // Window hit
+  if (!WIN.broken &&
+      p.x > WIN.x && p.x < WIN.x + WIN.w &&
+      p.y > WIN.y && p.y < WIN.y + WIN.h) {
+    smashWindow(p.x, p.y);
+    spawnHit(p.x, p.y, p.type==='tomato');
+    addKitchenDamage(p.x, p.y, p.type==='tomato');
+    const pts = p.type==='tomato' ? 45 : 15;
+    score += pts;
+    updateScoreDisplay();
+    spawnFloatingText('+'+pts+' 💥 WINDOW!', p.x, p.y - 20, '#88ddff', 24);
+    p.vx *= 0.3; p.vy *= 0.3; // slow down after breaking glass
+  }
+
+  // Kitchen item hits
+  for (let item of kitchenItems) {
+    if (item.hit) continue;
+    const ix = item.x*W, iy = item.y*H, iw = item.w*W, ih = item.h*H;
+    if (p.x > ix && p.x < ix+iw && p.y > iy && p.y < iy+ih) {
+      item.hit = true;
+      const pts = p.type==='tomato' ? item.pts*3 : item.pts;
+      score += pts;
+      updateScoreDisplay();
+      spawnFloatingText('+'+pts+(p.type==='tomato'?' 🍅':''), p.x, p.y, p.type==='tomato'?'#e74c3c':'#f0c060');
+      spawnHit(p.x, p.y, p.type==='tomato');
+      addKitchenDamage(p.x, p.y, p.type==='tomato');
+
+      // Play sound
+      if (p.type === 'tomato') { playTomatoSplat(p.x); }
+      else if (item.sound === 'metal') playMetalBang(p.x);
+      else if (item.sound === 'crash') playCrash(p.x);
+      else playThud(p.x);
+
+      // Knock item with physics
+      knockItem(item, p.vx, p.vy);
+
+      // Bounce projectile off
+      if (p.x < ix || p.x > ix+iw) p.vx *= -0.5;
+      else p.vy *= -0.5;
+    }
+  }
+
+  // Wall/floor hits
+  if (p.x < 5 || p.x > W-5) {
+    if (p.type==='tomato') playTomatoSplat(p.x); else playCrash(p.x);
+    addKitchenDamage(p.x, p.y, p.type==='tomato');
+    spawnHit(p.x, p.y, p.type==='tomato');
+    return true;
+  }
+  if (p.y > H * 0.67) {
+    playFloorBounce(p.x);
+    addKitchenDamage(p.x, p.y, p.type==='tomato');
+    spawnHit(p.x, p.y, p.type==='tomato');
+    return true;
+  }
+  if (p.y < -100 || p.x < -200 || p.x > W+200) return true;
+  return false;
+}
+
+function spawnHit(x, y, isTomato) {
+  hitEffects.push({ x, y, life:1, isTomato });
+  const n = isTomato ? 8 : 5;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random()*Math.PI*2, spd = 2+Math.random()*4;
+    debris.push({ x, y, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd-2, angle: Math.random()*Math.PI*2, spin: (Math.random()-0.5)*0.3, r: 3+Math.random()*5, life:1, isTomato });
+  }
+}
+
+function spawnFloatingText(text, x, y, color, size) {
+  floatingTexts.push({ text, x, y, vy:-1.5, life:1, color: color||'#f0c060', size: size||22 });
+}
+
+function addKitchenDamage(x, y, isTomato) {
+  if (isTomato) {
+    const pts = [];
+    for (let i = 0; i < 7; i++) { const a=(i/7)*Math.PI*2, r=15+Math.random()*20; pts.push([x+Math.cos(a)*r, y+Math.sin(a)*r]); }
+    kitchenDamage.push({ isTomato:true, pts });
+  } else {
+    kitchenDamage.push({ isTomato:false, x, y, r: 8+Math.random()*8, angle: Math.random()*Math.PI*2 });
+  }
+}
+
+// ─── INPUT ────────────────────────────────────────────────────────
+let touchStart = null;
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (!gameActive) return;
+  const t = e.touches[0];
+  touchStart = { x: t.clientX, y: t.clientY };
+  // Unlock AudioContext on first touch
+  try { getAudio().resume(); } catch(e) {}
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (!gameActive || !touchStart) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStart.x, dy = t.clientY - touchStart.y;
+  const dist = Math.sqrt(dx*dx+dy*dy);
+  if (dist < 10 || dy > -15) { touchStart = null; return; }
+  throwItem(touchStart.x, touchStart.y, dx, dy);
+  touchStart = null;
+}, { passive: false });
+
+canvas.addEventListener('mousedown', e => {
+  if (!gameActive) return;
+  touchStart = { x: e.clientX, y: e.clientY };
+  try { getAudio().resume(); } catch(e) {}
+});
+canvas.addEventListener('mouseup', e => {
+  if (!gameActive || !touchStart) return;
+  const dx = e.clientX - touchStart.x, dy = e.clientY - touchStart.y;
+  if (Math.sqrt(dx*dx+dy*dy) < 10 || dy > -10) { touchStart = null; return; }
+  throwItem(touchStart.x, touchStart.y, dx, dy);
+  touchStart = null;
+});
+
+function throwItem(sx, sy, dx, dy) {
+  if (selectedItem==='potato' && potatoes<=0) return;
+  if (selectedItem==='tomato' && tomatoes<=0) return;
+  const len = Math.sqrt(dx*dx+dy*dy);
+  const speed = Math.min(len * 0.18, 22);
+  const vx = (dx/len)*speed, vy = (dy/len)*speed;
+  const isTomato = selectedItem==='tomato';
+  projectiles.push({ x:sx, y:sy, vx, vy, angle: Math.atan2(vy,vx), spin:(Math.random()-0.5)*0.2, r: isTomato?18:14, type: selectedItem });
+  if (isTomato) tomatoes--; else potatoes--;
+  updateAmmoDisplay();
+  document.getElementById('hint').style.opacity = '0';
+  if (potatoes<=0 && tomatoes<=0) setTimeout(endGame, 2500);
+}
+
+function selectItem(type) {
+  selectedItem = type;
+  document.getElementById('btn-potato').classList.toggle('active', type==='potato');
+  document.getElementById('btn-tomato').classList.toggle('active', type==='tomato');
+}
+
+// ─── UI ───────────────────────────────────────────────────────────
+function updateScoreDisplay() { document.getElementById('score-display').textContent = score; }
+
+function updateAmmoDisplay() {
+  const ab = document.getElementById('ammo-block');
+  ab.innerHTML = '';
+  const pr = document.createElement('div'); pr.className='ammo-row';
+  for (let i=0; i<POTATO_COUNT; i++) { const p=document.createElement('div'); p.className='ammo-pip '+(i<potatoes?'pip-potato':'pip-used'); pr.appendChild(p); }
+  ab.appendChild(pr);
+  const tr = document.createElement('div'); tr.className='ammo-row';
+  for (let i=0; i<TOMATO_COUNT; i++) { const p=document.createElement('div'); p.className='ammo-pip '+(i<tomatoes?'pip-tomato':'pip-used'); tr.appendChild(p); }
+  ab.appendChild(tr);
+  document.getElementById('btn-potato').classList.toggle('empty', potatoes<=0);
+  document.getElementById('btn-tomato').classList.toggle('empty', tomatoes<=0);
+  if (potatoes<=0 && selectedItem==='potato' && tomatoes>0) selectItem('tomato');
+}
+
+// ─── GAME LOOP ────────────────────────────────────────────────────
+let lastTime = 0;
+function loop(ts) {
+  requestAnimationFrame(loop);
+  lastTime = ts;
+  ctx.clearRect(0, 0, W, H);
+  drawKitchen();
+  for (let item of kitchenItems) drawItem(item);
+  drawKitchenDamage();
+  drawFan();
+  drawHitEffects();
+  drawGlassShards();
+  drawDebris();
+  for (let p of projectiles) drawProjectile(p);
+  drawFloatingTexts();
+  drawForeground();
+
+  fanAngle += fanSpeed;
+  fanSpeed = Math.max(0.025, fanSpeed * 0.998);
+  projectiles = projectiles.filter(p => !updateProjectile(p));
+  updatePhysicsItems();
+  updateGlassShards();
+
+  for (let d of debris) { d.x+=d.vx; d.y+=d.vy; d.vy+=0.15; d.vx*=0.98; d.angle+=d.spin; d.life-=0.015; }
+  debris = debris.filter(d => d.life > 0);
+  for (let e of hitEffects) e.life -= 0.04;
+  hitEffects = hitEffects.filter(e => e.life > 0);
+  for (let t of floatingTexts) { t.y += t.vy; t.life -= 0.02; }
+  floatingTexts = floatingTexts.filter(t => t.life > 0);
+}
+requestAnimationFrame(loop);
+
+// ─── LEADERBOARD ──────────────────────────────────────────────────
+function getLeaderboard() { try { return JSON.parse(localStorage.getItem('potatofan_lb') || '[]'); } catch(e) { return []; } }
+function saveLeaderboard(lb) { localStorage.setItem('potatofan_lb', JSON.stringify(lb)); }
+
+// ─── GAME FLOW ────────────────────────────────────────────────────
+function startGame() {
+  score = 0; potatoes = POTATO_COUNT; tomatoes = TOMATO_COUNT;
+  selectedItem = 'potato'; projectiles = []; debris = []; floatingTexts = [];
+  hitEffects = []; kitchenDamage = []; glassShards = []; fanSpeed = 0.03;
+  WIN.broken = false;
+  buildKitchen();
+  updateScoreDisplay(); updateAmmoDisplay(); selectItem('potato');
+  document.getElementById('hint').style.opacity = '1';
+  document.getElementById('overlay').style.display = 'none';
+  gameActive = true;
+}
+
+function endGame() {
+  gameActive = false;
+  document.getElementById('overlay').style.display = 'flex';
+  showNameEntry();
+}
+
+function showNameEntry() {
+  document.getElementById('main-screen').style.display = 'none';
+  document.getElementById('leaderboard-screen').style.display = 'none';
+  document.getElementById('name-screen').style.display = 'block';
+  document.getElementById('final-score-display').textContent = score + ' pts';
+  document.getElementById('name-input').value = '';
+  setTimeout(() => document.getElementById('name-input').focus(), 300);
+}
+
+function saveScore() {
+  const name = document.getElementById('name-input').value.trim() || 'Anonymous';
+  const lb = getLeaderboard();
+  lb.push({ name, score, date: new Date().toLocaleDateString() });
+  lb.sort((a,b) => b.score-a.score);
+  saveLeaderboard(lb.slice(0,10));
+  showLeaderboard();
+}
+
+function skipSave() { showMain(); }
+
+function showMain() {
+  document.getElementById('main-screen').style.display = 'block';
+  document.getElementById('leaderboard-screen').style.display = 'none';
+  document.getElementById('name-screen').style.display = 'none';
+}
+
+function showLeaderboard() {
+  document.getElementById('main-screen').style.display = 'none';
+  document.getElementById('name-screen').style.display = 'none';
+  document.getElementById('leaderboard-screen').style.display = 'block';
+  const lb = getLeaderboard();
+  const el = document.getElementById('lb-list');
+  if (lb.length === 0) { el.innerHTML = '<div class="lb-empty">No scores yet — be the first!</div>'; return; }
+  el.innerHTML = lb.map((e,i) => `<div class="lb-row"><span class="lb-rank">${['🥇','🥈','🥉'][i]||'#'+(i+1)}</span><span class="lb-name">${e.name}</span><span class="lb-pts">${e.score}</span></div>`).join('');
+}
+
+document.getElementById('name-input').addEventListener('keydown', e => { if (e.key==='Enter') saveScore(); });
+</script>
+</body>
+</html>
