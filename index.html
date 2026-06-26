@@ -361,15 +361,14 @@ buildKitchen();
 
 // ─── PHYSICS ITEMS ────────────────────────────────────────────────
 function knockItem(item, impactVx, impactVy) {
-  if (item.phys) return; // already in motion
-  // Convert from relative coords to pixel coords for physics
+  if (item.phys) return;
   item.phys = {
     px: item.x * W + (item.w * W) / 2,
     py: item.y * H + (item.h * H) / 2,
-    vx: impactVx * (0.4 + Math.random() * 0.4),
-    vy: impactVy * (0.3 + Math.random() * 0.3) - 2,
+    vx: impactVx * (0.5 + Math.random() * 0.4),
+    vy: Math.min(impactVy * 0.3, -1) - 3 - Math.random() * 3, // always arc upward first
     angle: 0,
-    spin: (Math.random() - 0.5) * 0.18,
+    spin: (Math.random() - 0.5) * 0.22,
     w: item.w * W,
     h: item.h * H,
     bounces: 0,
@@ -378,7 +377,7 @@ function knockItem(item, impactVx, impactVy) {
 }
 
 function updatePhysicsItems() {
-  const floorY = H * 0.67;
+  const floorY = H * 0.75;
   for (let item of kitchenItems) {
     const ph = item.phys;
     if (!ph || ph.settled) continue;
@@ -397,11 +396,12 @@ function updatePhysicsItems() {
       ph.vx *= 0.72;
       ph.spin *= 0.6;
       ph.bounces++;
-      if (Math.abs(ph.vy) > 1.5) {
-        // Play bounce sound based on item sound type
+      if (Math.abs(ph.vy) > 2.5) {
         if (item.sound === 'metal') playMetalBang(ph.px);
         else if (item.sound === 'crash' && ph.bounces === 1) playCrash(ph.px);
         else playFloorBounce(ph.px);
+      } else if (Math.abs(ph.vy) > 1.0) {
+        playFloorBounce(ph.px);
       }
       if (Math.abs(ph.vy) < 0.8 && Math.abs(ph.vx) < 0.5) {
         ph.vy = 0; ph.vx *= 0.3; ph.spin *= 0.1;
@@ -438,7 +438,7 @@ function smashWindow(ix, iy) {
 }
 
 function updateGlassShards() {
-  const floorY = H * 0.67;
+  const floorY = H * 0.75;
   for (let s of glassShards) {
     s.vx *= 0.97;
     s.vy += 0.2;
@@ -1375,7 +1375,7 @@ function updateProjectile(p) {
     spawnHit(p.x, p.y, p.type==='tomato');
     return true;
   }
-  if (p.y > H * 0.67) {
+  if (p.y > H * 0.78) {
     playFloorBounce(p.x);
     addKitchenDamage(p.x, p.y, p.type==='tomato');
     spawnHit(p.x, p.y, p.type==='tomato');
