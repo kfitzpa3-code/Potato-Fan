@@ -395,13 +395,32 @@ function speak(text, accentHints) {
 
 
 
-function speakPotatoCall() {
+function buildUtterance(text, accentHints) {
+  const utt = new SpeechSynthesisUtterance(text);
+  const poolIdx = accentHints ? 0 : (accentIndex % ACCENT_POOLS.length);
+  const hints = accentHints || ACCENT_POOLS[poolIdx].hints;
+  const pool  = accentHints ? { rate:[0.72,0.82], pitch:[0.60,0.75] } : ACCENT_POOLS[poolIdx];
+  utt.rate   = rnd(pool.rate[0],  pool.rate[1]);
+  utt.pitch  = rnd(pool.pitch[0], pool.pitch[1]);
+  utt.volume = 1.0;
+  utt.onerror = (e) => console.warn('TTS:', e.error, text);
+  const voice = pickVoice(hints);
+  if (voice) utt.voice = voice;
+  return utt;
+}
+
+function nextPotatoCall() {
   let idx;
   do { idx = Math.floor(Math.random() * POTATO_CALLS.length); }
   while (idx === lastCallIndex && POTATO_CALLS.length > 1);
   lastCallIndex = idx;
   accentIndex++;
-  speak(POTATO_CALLS[idx]);
+  return POTATO_CALLS[idx];
+}
+
+function speakPotatoCall() {
+  // Desktop path — called from throwItem on non-touch devices
+  speak(nextPotatoCall());
 }
 let audioCtx = null;
 let audioUnlocked = false;
@@ -1855,6 +1874,17 @@ canvas.addEventListener('touchend', e => {
   const dx = t.clientX - touchStart.x, dy = t.clientY - touchStart.y;
   const dist = Math.sqrt(dx*dx+dy*dy);
   if (dist < 10 || dy > -15) { touchStart = null; return; }
+
+  // iOS requires speechSynthesis.speak() directly in the touch handler — not in a sub-call
+  if (window.speechSynthesis && gameActive) {
+    const isTomato = selectedItem === 'tomato';
+    const utt = isTomato
+      ? buildUtterance('Stewed tomatoes!', ['Daniel','Arthur','en-GB'])
+      : buildUtterance(nextPotatoCall());
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utt);
+  }
+
   throwItem(touchStart.x, touchStart.y, dx, dy);
   touchStart = null;
 }, { passive: false });
@@ -1873,7 +1903,7 @@ canvas.addEventListener('mouseup', e => {
   if (!gameActive || !touchStart) return;
   const dx = e.clientX - touchStart.x, dy = e.clientY - touchStart.y;
   if (Math.sqrt(dx*dx+dy*dy) < 10 || dy > -10) { touchStart = null; return; }
-  throwItem(touchStart.x, touchStart.y, dx, dy);
+  throwItem(touchStart.x, touchStart.y, dx, dy, true);
   touchStart = null;
 });
 
@@ -1924,14 +1954,16 @@ function drawThrowPreview() {
   }
 }
 
-function throwItem(sx, sy, dx, dy) {
+function throwItem(sx, sy, dx, dy, fromMouse) {
   if (selectedItem==='potato' && potatoes<=0) return;
   if (selectedItem==='tomato' && tomatoes<=0) return;
   const isTomato = selectedItem==='tomato';
 
-  // Speak FIRST — must be synchronous in the gesture call stack for iOS
-  if (isTomato) speak('Stewed tomatoes!', ['Daniel', 'Arthur', 'en-GB', 'British']);
-  else speakPotatoCall();
+  // Desktop: speak here. Mobile: already spoken directly in touchend handler.
+  if (fromMouse) {
+    if (isTomato) speak('Stewed tomatoes!', ['Daniel','Arthur','en-GB','British']);
+    else speakPotatoCall();
+  }
 
   const len = Math.sqrt(dx*dx+dy*dy);
   const speed = Math.min(len * 0.18, 22);
