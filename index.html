@@ -154,8 +154,8 @@
 </div>
 <div id="hint">Swipe up to throw</div>
 <div id="item-select">
-  <div class="item-btn active" id="btn-potato" onclick="selectItem('potato')">🥔</div>
-  <div class="item-btn" id="btn-tomato" onclick="selectItem('tomato')">🍅</div>
+  <div class="item-btn active" id="btn-potato">🥔</div>
+  <div class="item-btn" id="btn-tomato">🍅</div>
 </div>
 <div id="overlay">
   <div class="overlay-card">
@@ -189,11 +189,65 @@ function resize() { W = canvas.width = window.innerWidth; H = canvas.height = wi
 resize();
 window.addEventListener('resize', resize);
 
-// ─── AUDIO ENGINE ─────────────────────────────────────────────────
+// ─── SPEECH ───────────────────────────────────────────────────────
+const POTATO_CALLS = [
+  'Potato!',
+  'Youse guys!',
+  'Kombucha!',
+  'Whole Hog!',
+  'Flap Back!',
+  'Dental Plan!',
+];
+let lastCallIndex = -1;
+
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  // Cancel any currently speaking
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.rate = 1.1;
+  utt.pitch = 1.0;
+  utt.volume = 1.0;
+  // Pick a slightly gruff voice if available
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = voices.find(v => /male|daniel|fred|ralph|junior/i.test(v.name));
+  if (preferred) utt.voice = preferred;
+  window.speechSynthesis.speak(utt);
+}
+
+function speakPotatoCall() {
+  // Pick randomly but don't repeat same one twice in a row
+  let idx;
+  do { idx = Math.floor(Math.random() * POTATO_CALLS.length); } while (idx === lastCallIndex);
+  lastCallIndex = idx;
+  speak(POTATO_CALLS[idx]);
+}
+
+// Pre-load voices (browsers load async)
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
 let audioCtx = null;
+let audioUnlocked = false;
+
 function getAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   return audioCtx;
+}
+
+function unlockAudio() {
+  if (audioUnlocked) return;
+  try {
+    const ac = getAudio();
+    // Play a silent buffer — required by iOS/Safari to unlock audio
+    const buf = ac.createBuffer(1, 1, 22050);
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    src.connect(ac.destination);
+    src.start(0);
+    ac.resume().then(() => { audioUnlocked = true; });
+  } catch(e) {}
 }
 
 function playThud(x) {
@@ -396,16 +450,16 @@ function buildKitchen() {
   // y positions adjusted to sit on 3D countertop (horizon - 0.06 = ~0.46)
   const counterY = 0.50; // top of counter surface
   const shelfY   = 0.41; // shelf
-  kitchenItems.push({ type:'jar',     x:0.04, y:counterY,   w:0.05, h:0.075, pts:8,  sound:'crash' });
-  kitchenItems.push({ type:'jar',     x:0.11, y:counterY,   w:0.05, h:0.082, pts:8,  sound:'crash' });
-  kitchenItems.push({ type:'plate',   x:0.70, y:shelfY,     w:0.09, h:0.04,  pts:12, sound:'crash' });
-  kitchenItems.push({ type:'plate',   x:0.82, y:shelfY-0.02,w:0.09, h:0.04,  pts:12, sound:'crash' });
-  kitchenItems.push({ type:'mug',     x:0.68, y:counterY,   w:0.065,h:0.07,  pts:10, sound:'crash' });
-  kitchenItems.push({ type:'pot',     x:0.57, y:counterY-0.01,w:0.11,h:0.09, pts:15, sound:'metal' });
-  kitchenItems.push({ type:'bowl',    x:0.28, y:counterY-0.01,w:0.13,h:0.065,pts:10, sound:'crash' });
-  kitchenItems.push({ type:'toaster', x:0.16, y:counterY,   w:0.10, h:0.07,  pts:20, sound:'metal' });
-  kitchenItems.push({ type:'clock',   x:0.43, y:0.14,       w:0.08, h:0.09,  pts:25, sound:'crash' });
-  kitchenItems.push({ type:'plant',   x:0.87, y:counterY-0.05,w:0.08,h:0.13, pts:5,  sound:'thud'  });
+  kitchenItems.push({ type:'jar',     x:0.04, y:counterY,   w:0.05, h:0.075, pts:22,  sound:'crash' });
+  kitchenItems.push({ type:'jar',     x:0.11, y:counterY,   w:0.05, h:0.082, pts:22,  sound:'crash' });
+  kitchenItems.push({ type:'plate',   x:0.70, y:shelfY,     w:0.09, h:0.04,  pts:35, sound:'crash' });
+  kitchenItems.push({ type:'plate',   x:0.82, y:shelfY-0.02,w:0.09, h:0.04,  pts:35, sound:'crash' });
+  kitchenItems.push({ type:'mug',     x:0.68, y:counterY,   w:0.065,h:0.07,  pts:28, sound:'crash' });
+  kitchenItems.push({ type:'pot',     x:0.57, y:counterY-0.01,w:0.11,h:0.09, pts:40, sound:'metal' });
+  kitchenItems.push({ type:'bowl',    x:0.28, y:counterY-0.01,w:0.13,h:0.065,pts:28, sound:'crash' });
+  kitchenItems.push({ type:'toaster', x:0.16, y:counterY,   w:0.10, h:0.07,  pts:50, sound:'metal' });
+  kitchenItems.push({ type:'clock',   x:0.43, y:0.14,       w:0.08, h:0.09,  pts:60, sound:'crash' });
+  kitchenItems.push({ type:'plant',   x:0.87, y:counterY-0.05,w:0.08,h:0.13, pts:18,  sound:'thud'  });
   for (let item of kitchenItems) { item.hit = false; item.phys = null; }
 }
 buildKitchen();
@@ -413,13 +467,14 @@ buildKitchen();
 // ─── PHYSICS ITEMS ────────────────────────────────────────────────
 function knockItem(item, impactVx, impactVy) {
   if (item.phys) return;
+  const isPotato = Math.abs(impactVx) + Math.abs(impactVy) > 0; // always true
   item.phys = {
     px: item.x * W + (item.w * W) / 2,
     py: item.y * H + (item.h * H) / 2,
-    vx: impactVx * (0.5 + Math.random() * 0.4),
-    vy: Math.min(impactVy * 0.3, -1) - 3 - Math.random() * 3, // always arc upward first
+    vx: impactVx * (1.1 + Math.random() * 0.7),
+    vy: Math.min(impactVy * 0.5, -3) - 6 - Math.random() * 6,
     angle: 0,
-    spin: (Math.random() - 0.5) * 0.22,
+    spin: (Math.random() - 0.5) * 0.35,
     w: item.w * W,
     h: item.h * H,
     bounces: 0,
@@ -443,8 +498,8 @@ function updatePhysicsItems() {
     // Floor collision
     if (ph.py + ph.h / 2 >= floorY) {
       ph.py = floorY - ph.h / 2;
-      ph.vy *= -0.38;
-      ph.vx *= 0.72;
+      ph.vy *= -0.45;
+      ph.vx *= 0.82;
       ph.spin *= 0.6;
       ph.bounces++;
       if (Math.abs(ph.vy) > 2.5) {
@@ -1244,20 +1299,125 @@ function drawForeground() {
   // (hint text rendered by DOM, this just adds a subtle arc)
 }
 
+function drawJar(cx, cy, r, angle) {
+  // A glass jar of stewed tomatoes, upright but rotated with spin
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+
+  const jw = r * 1.1;   // jar half-width
+  const jh = r * 1.6;   // jar half-height
+  const lidH = r * 0.28;
+
+  // Jar shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath(); ctx.ellipse(2, jh+3, jw*0.7, r*0.18, 0, 0, Math.PI*2); ctx.fill();
+
+  // Glass body — slightly tapered rectangle with rounded bottom
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-jw, -jh + lidH);
+  ctx.lineTo(-jw*0.9, jh);
+  ctx.quadraticCurveTo(0, jh*1.08, jw*0.9, jh);
+  ctx.lineTo(jw, -jh + lidH);
+  ctx.closePath();
+  // Glass fill — tinted red-orange for tomato contents
+  const glassG = ctx.createLinearGradient(-jw, 0, jw, 0);
+  glassG.addColorStop(0,   'rgba(180,60,30,0.85)');
+  glassG.addColorStop(0.35,'rgba(210,80,40,0.9)');
+  glassG.addColorStop(0.65,'rgba(200,70,35,0.85)');
+  glassG.addColorStop(1,   'rgba(150,40,20,0.9)');
+  ctx.fillStyle = glassG;
+  ctx.fill();
+
+  // Tomato chunks visible inside
+  ctx.fillStyle = 'rgba(255,120,60,0.55)';
+  ctx.beginPath(); ctx.ellipse(-jw*0.3, jh*0.2, jw*0.22, r*0.18, 0.3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(jw*0.2, jh*0.45, jw*0.18, r*0.15, -0.2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-jw*0.1, jh*0.6, jw*0.14, r*0.12, 0.5, 0, Math.PI*2); ctx.fill();
+
+  // Glass highlight (left sheen)
+  const sheenG = ctx.createLinearGradient(-jw, -jh, -jw*0.2, jh);
+  sheenG.addColorStop(0,   'rgba(255,255,255,0.35)');
+  sheenG.addColorStop(0.4, 'rgba(255,255,255,0.15)');
+  sheenG.addColorStop(1,   'rgba(255,255,255,0)');
+  ctx.fillStyle = sheenG;
+  ctx.fill(); // re-uses same path still clipped
+  ctx.restore();
+
+  // Label — cream coloured paper wrap
+  ctx.fillStyle = '#f0e8c8';
+  ctx.fillRect(-jw*0.88, -jh*0.35, jw*1.76, jh*0.72);
+  // Label border
+  ctx.strokeStyle = '#c8a040'; ctx.lineWidth = 1;
+  ctx.strokeRect(-jw*0.88, -jh*0.35, jw*1.76, jh*0.72);
+  // Label text "STEWED"
+  ctx.fillStyle = '#8a2010';
+  ctx.font = `bold ${r*0.32}px Georgia`;
+  ctx.textAlign = 'center';
+  ctx.fillText('STEWED', 0, -jh*0.08);
+  // Label text "TOMATOES"
+  ctx.font = `bold ${r*0.26}px Georgia`;
+  ctx.fillText('TOMATOES', 0, jh*0.15);
+  // Small tomato icon on label
+  ctx.font = `${r*0.3}px serif`;
+  ctx.fillText('🍅', 0, jh*0.36);
+
+  // Jar lid — flat metal cap
+  const lidG = ctx.createLinearGradient(-jw, -jh, jw, -jh+lidH);
+  lidG.addColorStop(0,   '#a0b850');
+  lidG.addColorStop(0.3, '#c8d870');
+  lidG.addColorStop(0.6, '#90a840');
+  lidG.addColorStop(1,   '#708030');
+  ctx.fillStyle = lidG;
+  ctx.beginPath();
+  ctx.moveTo(-jw*1.05, -jh+lidH);
+  ctx.lineTo(jw*1.05, -jh+lidH);
+  ctx.lineTo(jw, -jh);
+  ctx.lineTo(-jw, -jh);
+  ctx.closePath(); ctx.fill();
+  // Lid top cap
+  ctx.fillStyle = '#b0c860';
+  ctx.beginPath(); ctx.ellipse(0, -jh, jw, lidH*0.35, 0, 0, Math.PI*2); ctx.fill();
+  // Lid ring detail
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(0, -jh+lidH*0.5, jw*1.02, lidH*0.15, 0, 0, Math.PI*2); ctx.stroke();
+
+  // Outline
+  ctx.strokeStyle = 'rgba(80,30,10,0.3)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-jw, -jh + lidH);
+  ctx.lineTo(-jw*0.9, jh);
+  ctx.quadraticCurveTo(0, jh*1.08, jw*0.9, jh);
+  ctx.lineTo(jw, -jh + lidH);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 function drawProjectile(p) {
   ctx.save();
-  ctx.translate(p.x, p.y);
-  ctx.rotate(p.angle);
   if (p.type === 'potato') {
-    ctx.fillStyle = '#8B6914';
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle);
+    // Potato body
+    const potG = ctx.createRadialGradient(-p.r*0.3, -p.r*0.3, p.r*0.1, 0, 0, p.r*1.4);
+    potG.addColorStop(0, '#c8a040');
+    potG.addColorStop(0.5,'#8B6914');
+    potG.addColorStop(1, '#5a3f08');
+    ctx.fillStyle = potG;
     ctx.beginPath(); ctx.ellipse(0, 0, p.r*1.3, p.r, 0.3, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#7a5510'; ctx.fillRect(-3, -2, 6, 4);
+    // Eyes/divots
+    ctx.fillStyle = '#5a3f08';
+    ctx.beginPath(); ctx.ellipse(-p.r*0.35, -p.r*0.2, p.r*0.12, p.r*0.09, -0.3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(p.r*0.2, p.r*0.25, p.r*0.1, p.r*0.08, 0.4, 0, Math.PI*2); ctx.fill();
+    // Highlight
+    ctx.fillStyle = 'rgba(255,220,120,0.25)';
+    ctx.beginPath(); ctx.ellipse(-p.r*0.2, -p.r*0.3, p.r*0.5, p.r*0.3, -0.4, 0, Math.PI*2); ctx.fill();
   } else {
-    ctx.fillStyle = '#c0392b';
-    ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.beginPath(); ctx.arc(-p.r*0.25, -p.r*0.25, p.r*0.35, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#e74c3c'; ctx.font = `${p.r*1.2}px serif`; ctx.textAlign = 'center'; ctx.fillText('🍅', 0, p.r*0.4);
+    ctx.restore();
+    drawJar(p.x, p.y, p.r, p.angle);
+    return;
   }
   ctx.restore();
 }
@@ -1324,7 +1484,7 @@ function drawKitchenDamage() {
 // ─── PHYSICS ──────────────────────────────────────────────────────
 function updateProjectile(p) {
   p.vx *= 0.995;
-  p.vy += 0.25;
+  p.vy += 0.18;
   p.x += p.vx;
   p.y += p.vy;
   p.angle += p.spin;
@@ -1343,7 +1503,7 @@ function updateProjectile(p) {
       const bx = fcx + (tipX-fcx)*t, by = fcy + (tipY-fcy)*t;
       const dx = p.x - bx, dy = p.y - by;
       if (Math.sqrt(dx*dx+dy*dy) < p.r + 9) {
-        const spd = Math.sqrt(p.vx*p.vx+p.vy*p.vy) * 1.5;
+        const spd = Math.sqrt(p.vx*p.vx+p.vy*p.vy) * 2.0;
         p.vx = cosA * spd * (0.6 + Math.random()*0.6);
         p.vy = -(Math.abs(p.vy) * 0.4 + 3 + Math.random()*3);
         p.spin = cosA * (0.3 + Math.random()*0.3);
@@ -1389,7 +1549,7 @@ function updateProjectile(p) {
     const ix = item.x*W, iy = item.y*H, iw = item.w*W, ih = item.h*H;
     if (p.x > ix && p.x < ix+iw && p.y > iy && p.y < iy+ih) {
       item.hit = true;
-      const pts = p.type==='tomato' ? item.pts*3 : item.pts;
+      const pts = p.type==='tomato' ? item.pts*4 : item.pts;
       score += pts;
       updateScoreDisplay();
       spawnFloatingText('+'+pts+(p.type==='tomato'?' 🍅':''), p.x, p.y, p.type==='tomato'?'#e74c3c':'#f0c060');
@@ -1452,7 +1612,7 @@ canvas.addEventListener('touchstart', e => {
   if (!gameActive) return;
   const t = e.touches[0];
   touchStart = { x: t.clientX, y: t.clientY, cx: t.clientX, cy: t.clientY };
-  try { getAudio().resume(); } catch(e) {}
+  unlockAudio();
 }, { passive: false });
 
 canvas.addEventListener('touchmove', e => {
@@ -1477,7 +1637,7 @@ canvas.addEventListener('touchend', e => {
 canvas.addEventListener('mousedown', e => {
   if (!gameActive) return;
   touchStart = { x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY };
-  try { getAudio().resume(); } catch(e) {}
+  unlockAudio();
 });
 canvas.addEventListener('mousemove', e => {
   if (!gameActive || !touchStart) return;
@@ -1498,7 +1658,7 @@ function drawThrowPreview() {
   const dx = touchStart.cx - sx, dy = touchStart.cy - sy;
   const dist = Math.sqrt(dx*dx+dy*dy);
   const isTomato = selectedItem === 'tomato';
-  const r = isTomato ? 18 : 14;
+  const r = isTomato ? 18 : 20;
 
   // Draw the item at touch-down point — glowing so it's visible
   ctx.save();
@@ -1511,12 +1671,8 @@ function drawThrowPreview() {
 
   // The item itself
   if (isTomato) {
-    ctx.fillStyle = '#c0392b';
-    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.beginPath(); ctx.arc(sx - r*0.25, sy - r*0.25, r*0.35, 0, Math.PI*2); ctx.fill();
-    ctx.font = `${r*1.2}px serif`; ctx.textAlign = 'center';
-    ctx.fillText('🍅', sx, sy + r*0.4);
+    ctx.restore();
+    drawJar(sx, sy, r, 0);
   } else {
     ctx.fillStyle = '#8B6914';
     ctx.beginPath(); ctx.ellipse(sx, sy, r*1.3, r, 0.3, 0, Math.PI*2); ctx.fill();
@@ -1526,7 +1682,7 @@ function drawThrowPreview() {
   // Arc preview dots if swiping upward
   if (dist > 15 && dy < 0) {
     const len = Math.sqrt(dx*dx+dy*dy);
-    const speed = Math.min(len * 0.18, 22);
+    const speed = Math.min(len * 0.26, 32);
     const vx = (dx/len)*speed, vy = (dy/len)*speed;
     ctx.fillStyle = isTomato ? 'rgba(220,80,80,0.5)' : 'rgba(200,160,60,0.5)';
     let px = sx, py = sy, pvx = vx, pvy = vy;
@@ -1546,18 +1702,19 @@ function throwItem(sx, sy, dx, dy) {
   if (selectedItem==='potato' && potatoes<=0) return;
   if (selectedItem==='tomato' && tomatoes<=0) return;
   const len = Math.sqrt(dx*dx+dy*dy);
-  const speed = Math.min(len * 0.18, 22);
+  const speed = Math.min(len * 0.26, 32);
   const vx = (dx/len)*speed, vy = (dy/len)*speed;
   const isTomato = selectedItem==='tomato';
   projectiles.push({
     x:sx, y:sy, vx, vy,
     angle: Math.atan2(vy,vx),
     spin:(Math.random()-0.5)*0.2,
-    r: isTomato?18:14,
+    r: isTomato ? 18 : 20,          // potato is now bigger
     type: selectedItem,
-    hitFan: false   // must hit fan before interacting with anything else
+    hitFan: false
   });
-  if (isTomato) tomatoes--; else potatoes--;
+  if (isTomato) { tomatoes--; speak('Stewed tomatoes!'); }
+  else { potatoes--; speakPotatoCall(); }
   updateAmmoDisplay();
   document.getElementById('hint').style.opacity = '0';
   if (potatoes<=0 && tomatoes<=0) setTimeout(endGame, 2500);
@@ -1565,9 +1722,29 @@ function throwItem(sx, sy, dx, dy) {
 
 function selectItem(type) {
   selectedItem = type;
+  touchStart = null; // cancel any in-progress throw gesture
   document.getElementById('btn-potato').classList.toggle('active', type==='potato');
   document.getElementById('btn-tomato').classList.toggle('active', type==='tomato');
 }
+
+// Wire item buttons with touchstart so selection fires before canvas touchstart
+(function() {
+  function wireBtn(id, type) {
+    const btn = document.getElementById(id);
+    btn.addEventListener('touchstart', function(e) {
+      e.stopPropagation(); // don't let it reach canvas
+      e.preventDefault();
+      selectItem(type);
+      unlockAudio();
+    }, { passive: false });
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      selectItem(type);
+    });
+  }
+  wireBtn('btn-potato', 'potato');
+  wireBtn('btn-tomato', 'tomato');
+})();
 
 // ─── UI ───────────────────────────────────────────────────────────
 function updateScoreDisplay() { document.getElementById('score-display').textContent = score; }
@@ -1645,6 +1822,7 @@ async function sbInsertScore(name, score) {
 
 // ─── GAME FLOW ────────────────────────────────────────────────────
 function startGame() {
+  unlockAudio();
   score = 0; potatoes = POTATO_COUNT; tomatoes = TOMATO_COUNT;
   selectedItem = 'potato'; projectiles = []; debris = []; floatingTexts = [];
   hitEffects = []; kitchenDamage = []; glassShards = []; fanSpeed = 0.03;
