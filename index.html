@@ -232,7 +232,9 @@ let audioCtx = null;
 let audioUnlocked = false;
 
 function getAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
   return audioCtx;
 }
 
@@ -240,7 +242,8 @@ function unlockAudio() {
   if (audioUnlocked) return;
   try {
     const ac = getAudio();
-    // Play a silent buffer — required by iOS/Safari to unlock audio
+    if (!ac) return;
+    // Silent buffer trick required by iOS Safari
     const buf = ac.createBuffer(1, 1, 22050);
     const src = ac.createBufferSource();
     src.buffer = buf;
@@ -248,11 +251,17 @@ function unlockAudio() {
     src.start(0);
     ac.resume().then(() => { audioUnlocked = true; });
   } catch(e) {}
+  // Also prime speech synthesis
+  if (window.speechSynthesis) {
+    const dummy = new SpeechSynthesisUtterance('');
+    dummy.volume = 0;
+    try { window.speechSynthesis.speak(dummy); } catch(e) {}
+  }
 }
 
 function playThud(x) {
   try {
-    const ac = getAudio();
+    const ac = getAudio(); if (!ac || ac.state === 'suspended') return;
     const buf = ac.createBuffer(1, ac.sampleRate * 0.25, ac.sampleRate);
     const data = buf.getChannelData(0);
     for (let i = 0; i < data.length; i++) {
@@ -276,7 +285,7 @@ function playThud(x) {
 
 function playCrash(x) {
   try {
-    const ac = getAudio();
+    const ac = getAudio(); if (!ac || ac.state === 'suspended') return;
     const dur = 0.4;
     const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
     const data = buf.getChannelData(0);
@@ -301,7 +310,7 @@ function playCrash(x) {
 
 function playGlass(x) {
   try {
-    const ac = getAudio();
+    const ac = getAudio(); if (!ac || ac.state === 'suspended') return;
     // High-freq shards + low crack
     for (let layer = 0; layer < 3; layer++) {
       const dur = 0.6 + layer * 0.2;
@@ -331,7 +340,7 @@ function playGlass(x) {
 
 function playFanHit() {
   try {
-    const ac = getAudio();
+    const ac = getAudio(); if (!ac || ac.state === 'suspended') return;
     // Metallic clang + wood thwack
     const dur = 0.5;
     const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
@@ -354,7 +363,7 @@ function playFanHit() {
 
 function playMetalBang(x) {
   try {
-    const ac = getAudio();
+    const ac = getAudio(); if (!ac || ac.state === 'suspended') return;
     const dur = 0.35;
     const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
     const data = buf.getChannelData(0);
@@ -379,7 +388,7 @@ function playMetalBang(x) {
 
 function playTomatoSplat(x) {
   try {
-    const ac = getAudio();
+    const ac = getAudio(); if (!ac || ac.state === 'suspended') return;
     const dur = 0.3;
     const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
     const data = buf.getChannelData(0);
@@ -403,7 +412,7 @@ function playTomatoSplat(x) {
 
 function playFloorBounce(x) {
   try {
-    const ac = getAudio();
+    const ac = getAudio(); if (!ac || ac.state === 'suspended') return;
     const dur = 0.15;
     const buf = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate);
     const data = buf.getChannelData(0);
@@ -471,10 +480,10 @@ function knockItem(item, impactVx, impactVy) {
   item.phys = {
     px: item.x * W + (item.w * W) / 2,
     py: item.y * H + (item.h * H) / 2,
-    vx: impactVx * (1.1 + Math.random() * 0.7),
-    vy: Math.min(impactVy * 0.5, -3) - 6 - Math.random() * 6,
+    vx: impactVx * (1.2 + Math.random() * 0.6),
+    vy: Math.min(impactVy * 0.5, -3) - 6 - Math.random() * 5,
     angle: 0,
-    spin: (Math.random() - 0.5) * 0.35,
+    spin: (Math.random() - 0.5) * 0.4,
     w: item.w * W,
     h: item.h * H,
     bounces: 0,
@@ -1484,7 +1493,7 @@ function drawKitchenDamage() {
 // ─── PHYSICS ──────────────────────────────────────────────────────
 function updateProjectile(p) {
   p.vx *= 0.995;
-  p.vy += 0.18;
+  p.vy += 0.25;
   p.x += p.vx;
   p.y += p.vy;
   p.angle += p.spin;
@@ -1503,13 +1512,17 @@ function updateProjectile(p) {
       const bx = fcx + (tipX-fcx)*t, by = fcy + (tipY-fcy)*t;
       const dx = p.x - bx, dy = p.y - by;
       if (Math.sqrt(dx*dx+dy*dy) < p.r + 9) {
-        const spd = Math.sqrt(p.vx*p.vx+p.vy*p.vy) * 2.0;
-        p.vx = cosA * spd * (0.6 + Math.random()*0.6);
-        p.vy = -(Math.abs(p.vy) * 0.4 + 3 + Math.random()*3);
-        p.spin = cosA * (0.3 + Math.random()*0.3);
+        // Give it a strong random kick off the blade — this is where the damage comes from
+        const inSpd = Math.sqrt(p.vx*p.vx+p.vy*p.vy);
+        const outSpd = Math.max(inSpd, 14) * 1.6; // always leave fast regardless of entry speed
+        const deflectAngle = Math.atan2(p.vy, p.vx) + (Math.random()-0.5) * 1.2 + Math.PI * 0.4;
+        p.vx = Math.cos(deflectAngle) * outSpd * (cosA > 0 ? 1 : -1) * (0.8 + Math.random()*0.5);
+        p.vy = -Math.abs(Math.sin(deflectAngle) * outSpd) - 4; // always fling upward/across
+        p.spin = cosA * (0.5 + Math.random()*0.5);
         fanSpeed = Math.min(0.09, fanSpeed + 0.02);
         playFanHit();
         spawnHit(p.x, p.y, p.type==='tomato');
+        p.hitFan = true;
         return false;
       }
     }
@@ -1560,8 +1573,9 @@ function updateProjectile(p) {
       else if (item.sound === 'crash') playCrash(p.x);
       else playThud(p.x);
       knockItem(item, p.vx, p.vy);
-      if (p.x < ix || p.x > ix+iw) p.vx *= -0.5;
-      else p.vy *= -0.5;
+      // Slow a bit but keep going — can hit multiple items after the fan
+      p.vx *= 0.7;
+      p.vy *= 0.7;
     }
   }
 
@@ -1682,7 +1696,7 @@ function drawThrowPreview() {
   // Arc preview dots if swiping upward
   if (dist > 15 && dy < 0) {
     const len = Math.sqrt(dx*dx+dy*dy);
-    const speed = Math.min(len * 0.26, 32);
+    const speed = Math.min(len * 0.18, 22);
     const vx = (dx/len)*speed, vy = (dy/len)*speed;
     ctx.fillStyle = isTomato ? 'rgba(220,80,80,0.5)' : 'rgba(200,160,60,0.5)';
     let px = sx, py = sy, pvx = vx, pvy = vy;
@@ -1702,7 +1716,7 @@ function throwItem(sx, sy, dx, dy) {
   if (selectedItem==='potato' && potatoes<=0) return;
   if (selectedItem==='tomato' && tomatoes<=0) return;
   const len = Math.sqrt(dx*dx+dy*dy);
-  const speed = Math.min(len * 0.26, 32);
+  const speed = Math.min(len * 0.18, 22);
   const vx = (dx/len)*speed, vy = (dy/len)*speed;
   const isTomato = selectedItem==='tomato';
   projectiles.push({
