@@ -164,7 +164,6 @@
   <div id="ammo-block"></div>
 </div>
 <div id="hint">Swipe up to throw</div>
-<div id="speech-test" onclick="testSpeech()" style="position:fixed;bottom:140px;left:50%;transform:translateX(-50%);background:rgba(30,20,5,0.9);border:1px solid #f0c840;border-radius:8px;padding:8px 18px;color:#f0c840;font-size:13px;z-index:20;cursor:pointer;">🔊 Test Voice</div>
 <div id="item-select">
   <div class="item-btn active" id="btn-potato">🥔</div>
   <div class="item-btn" id="btn-tomato">🍅</div>
@@ -297,18 +296,19 @@ window.addEventListener('mouseup', dialPointerEnd);
 
 drawDial();
 const POTATO_CALLS = [
-  'Poh-tay-toe!',
-  'Yoose guys!',
-  'Kom-boo-cha!',
-  'Whole Hog!',
-  'Flap Back!',
-  'Dental Plan!',
-  'Fellllas!',
-  'Scchhemick!',
-  'Rennn-zo!',
-  'Potato Fan!!',
-  'Oh my goodness!',
-  'Good heavens!',
+  'Poh... tay... TOE!!!',
+  'Yoos guys!',
+  'Kom... BOOO... cha!!!',
+  'WHOOOOLE Hooooog!!',
+  'FLAAAP Baaack!!',
+  'Deeental Plaaaan!!',
+  'FELLLLLLAS!!!',
+  'SCCHHEMICK!!!',
+  'Rennnnnnzo!!',
+  'POTATO FAAAAN!!!',
+  'Good... HEAVENS!!!',
+  'Somebody stop me!!!',
+  'Oh CANAAAAADA!!!',
 ];
 let lastCallIndex = -1;
 let milestoneSpoken = false;
@@ -316,28 +316,26 @@ let cachedVoices = [];
 let accentIndex = 0;
 
 const ACCENT_POOLS = [
-  ['Daniel', 'Arthur', 'en-GB'],
-  ['Karen', 'Matilda', 'en-AU'],
-  ['en-CA', 'Samantha', 'Nathan'],
-  ['Zira', 'en-US', 'Alex', 'Tom'],
-  ['Moira', 'Fiona', 'en-IE'],
-  ['Fiona', 'en-GB'],
-  ['Rishi', 'en-IN', 'Veena'],
-  ['Kyoko', 'Ava', 'en-US'],
-  ['Fred', 'en-US', 'Tom'],
-  ['Amelie', 'fr-CA', 'en-CA'],
-];
-const ACCENT_MODS = [
-  { rate:[0.88,0.96], pitch:[0.85,1.0]  },
-  { rate:[1.05,1.20], pitch:[1.0, 1.3]  },
-  { rate:[0.90,1.05], pitch:[0.90,1.1]  },
-  { rate:[0.80,0.92], pitch:[0.75,0.95] },
-  { rate:[0.95,1.10], pitch:[1.1, 1.4]  },
-  { rate:[0.82,0.95], pitch:[0.80,1.0]  },
-  { rate:[1.0, 1.15], pitch:[1.0, 1.3]  },
-  { rate:[1.1, 1.3],  pitch:[1.2, 1.6]  },
-  { rate:[0.70,0.85], pitch:[0.60,0.80] },
-  { rate:[1.05,1.2],  pitch:[1.1, 1.5]  },
+  // British — posh and slow
+  { hints:['Daniel','Arthur','en-GB'],      rate:[0.72,0.82], pitch:[0.60,0.75] },
+  // Australian — fast and bright
+  { hints:['Karen','Matilda','en-AU'],       rate:[1.30,1.50], pitch:[1.30,1.60] },
+  // Canadian redneck — slow drawl, very nasal, low
+  { hints:['en-CA','Samantha','Nathan'],     rate:[0.60,0.72], pitch:[0.50,0.65] },
+  // Canadian redneck 2 — faster but still nasal
+  { hints:['en-CA','Nathan','Samantha'],     rate:[0.75,0.88], pitch:[0.55,0.70] },
+  // Irish — lilting and high
+  { hints:['Moira','Fiona','en-IE'],         rate:[1.10,1.30], pitch:[1.40,1.70] },
+  // Indian — melodic, fast
+  { hints:['Rishi','en-IN','Veena'],         rate:[1.20,1.40], pitch:[1.20,1.50] },
+  // East Asian — very fast, very high
+  { hints:['Kyoko','Ava','en-US'],           rate:[1.50,1.80], pitch:[1.60,2.00] },
+  // Deep redneck / country — extremely slow, very low
+  { hints:['Fred','en-US','Tom','Alex'],     rate:[0.50,0.65], pitch:[0.40,0.55] },
+  // Scottish — gruff and medium
+  { hints:['Fiona','en-GB'],                 rate:[0.80,0.95], pitch:[0.70,0.85] },
+  // Hyper excited — any voice cranked way up
+  { hints:['en-US','Samantha','Alex'],       rate:[1.60,1.90], pitch:[1.70,2.00] },
 ];
 
 function rnd(a, b) { return a + Math.random() * (b - a); }
@@ -367,11 +365,19 @@ function speak(text, accentHints) {
   try {
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(text);
-    const poolIdx = accentHints ? 0 : (accentIndex % ACCENT_POOLS.length);
-    const hints = accentHints || ACCENT_POOLS[poolIdx];
-    const mods  = ACCENT_MODS[accentHints ? 0 : poolIdx] || ACCENT_MODS[0];
-    utt.rate   = rnd(mods.rate[0],  mods.rate[1]);
-    utt.pitch  = rnd(mods.pitch[0], mods.pitch[1]);
+    let hints, rate, pitch;
+    if (accentHints) {
+      // Direct hints passed in (e.g. stewed tomatoes — use British)
+      hints = accentHints;
+      rate  = [0.72, 0.82]; pitch = [0.60, 0.75];
+    } else {
+      const pool = ACCENT_POOLS[accentIndex % ACCENT_POOLS.length];
+      hints = pool.hints;
+      rate  = pool.rate;
+      pitch = pool.pitch;
+    }
+    utt.rate   = rnd(rate[0],  rate[1]);
+    utt.pitch  = rnd(pitch[0], pitch[1]);
     utt.volume = 1.0;
     const voice = pickVoice(hints);
     if (voice) utt.voice = voice;
@@ -379,33 +385,7 @@ function speak(text, accentHints) {
   } catch(e) {}
 }
 
-function testSpeech() {
-  const btn = document.getElementById('speech-test');
-  if (!window.speechSynthesis) { btn.textContent = '❌ No speechSynthesis'; return; }
-  loadVoices();
-  const voices = cachedVoices;
-  btn.textContent = `🔊 ${voices.length} voices`;
-  if (voices.length === 0) {
-    btn.textContent = '❌ 0 voices — try again';
-    // Force a reload of voices
-    setTimeout(() => {
-      loadVoices();
-      btn.textContent = `voices: ${cachedVoices.length}`;
-    }, 500);
-    return;
-  }
-  // Speak directly — no accent logic, just raw speak to test
-  window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance('Potato Fan!');
-  utt.volume = 1;
-  utt.rate = 1;
-  utt.pitch = 1;
-  utt.voice = voices.find(v => /en/i.test(v.lang)) || voices[0];
-  utt.onstart = () => { btn.textContent = '🗣️ Speaking...'; };
-  utt.onend   = () => { btn.textContent = `✅ ${utt.voice ? utt.voice.name : 'default'}`; };
-  utt.onerror = (e) => { btn.textContent = `❌ Error: ${e.error}`; };
-  window.speechSynthesis.speak(utt);
-}
+
 
 function speakPotatoCall() {
   let idx;
