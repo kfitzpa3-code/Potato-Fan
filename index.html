@@ -300,13 +300,13 @@ const POTATO_CALLS = [
   'Potato.',
   'Yoos guys.',
   'Kom-boo-cha.',
-  'Whole... Hog.',
-  'Flap... Back.',
+  'Whole Hog!',
+  'Flap Back.',
   'Dental Plan.',
   'Fellas.',
   'Scchhemick.',
   'Renzo.',
-  'Potato Fan.',
+  'Potato Fan!',
   'Good heavens.',
   'Somebody stop me.',
   'Oh Canada.',
@@ -1587,20 +1587,124 @@ function drawFan() {
 }
 
 function drawForeground() {
-  // Thin ledge at the very bottom — just enough to frame the throw zone
-  const fgY = H * 0.86;
-  const ledgeH = H * 0.015; // thin top surface strip
+  const tableTop = H * 0.80;
+  const tableH   = H * 0.06;
+  const legW     = W * 0.028;
+  const legH     = H * 0.14;
+  const legY     = tableTop + tableH;
 
-  // Counter top surface — just a narrow strip
-  const fgGrad = ctx.createLinearGradient(0, fgY, 0, fgY + ledgeH);
-  fgGrad.addColorStop(0, '#c8a050');
-  fgGrad.addColorStop(1, '#a07830');
-  ctx.fillStyle = fgGrad;
-  ctx.fillRect(0, fgY, W, ledgeH);
+  // ── TABLE LEGS ────────────────────────────────────────────────────
+  const legPositions = [W*0.08, W*0.28, W*0.72, W*0.92];
+  for (const lx of legPositions) {
+    // Leg shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(lx - legW/2 + 4, legY + 4, legW, legH);
+    // Leg face
+    const lgG = ctx.createLinearGradient(lx - legW/2, 0, lx + legW/2, 0);
+    lgG.addColorStop(0,   '#7a4a18');
+    lgG.addColorStop(0.4, '#a06828');
+    lgG.addColorStop(1,   '#6a3a10');
+    ctx.fillStyle = lgG;
+    ctx.fillRect(lx - legW/2, legY, legW, legH);
+  }
 
-  // Top edge highlight
-  ctx.strokeStyle = 'rgba(255,230,150,0.4)'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(0, fgY); ctx.lineTo(W, fgY); ctx.stroke();
+  // ── CHAIRS (two partial chair backs visible at bottom) ────────────
+  function drawChair(cx, side) {
+    const chW  = W * 0.16;
+    const chBH = H * 0.11;  // back height
+    const chBY = tableTop - chBH * 0.6; // chair back peeks above table
+    const chSeatY = tableTop + tableH * 0.3;
+    const chSeatH = H * 0.04;
+
+    // Chair back shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(cx - chW/2 + 3, chBY + 3, chW, chBH);
+
+    // Chair back — oak wood
+    const chG = ctx.createLinearGradient(cx - chW/2, 0, cx + chW/2, 0);
+    chG.addColorStop(0,   '#8a5018');
+    chG.addColorStop(0.35,'#b07028');
+    chG.addColorStop(0.7, '#986020');
+    chG.addColorStop(1,   '#7a4415');
+    ctx.fillStyle = chG;
+    // Rounded top corners on chair back
+    ctx.beginPath();
+    ctx.roundRect(cx - chW/2, chBY, chW, chBH, [8, 8, 2, 2]);
+    ctx.fill();
+
+    // Chair back rails (horizontal slats)
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    for (let r = 0; r < 3; r++) {
+      const ry = chBY + chBH * (0.2 + r * 0.28);
+      ctx.fillRect(cx - chW/2 + 4, ry, chW - 8, H*0.008);
+    }
+    // Rail highlight
+    ctx.fillStyle = 'rgba(255,200,100,0.18)';
+    ctx.fillRect(cx - chW/2 + 2, chBY + 2, chW - 4, 3);
+
+    // Chair seat edge (just the front edge visible under table)
+    const seatG = ctx.createLinearGradient(cx - chW/2, chSeatY, cx + chW/2, chSeatY + chSeatH);
+    seatG.addColorStop(0, '#9a6020'); seatG.addColorStop(1, '#6a3e10');
+    ctx.fillStyle = seatG;
+    ctx.fillRect(cx - chW/2, chSeatY, chW, chSeatH);
+  }
+
+  drawChair(W * 0.18, 'left');
+  drawChair(W * 0.82, 'right');
+
+  // ── TABLE TOP ─────────────────────────────────────────────────────
+  // Table shadow on floor
+  const tshG = ctx.createLinearGradient(0, legY, 0, legY + H*0.04);
+  tshG.addColorStop(0, 'rgba(0,0,0,0.22)'); tshG.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = tshG;
+  ctx.fillRect(W*0.04, legY, W*0.92, H*0.04);
+
+  // Table top surface — rich dark wood grain
+  const tG = ctx.createLinearGradient(0, tableTop, 0, tableTop + tableH);
+  tG.addColorStop(0,   '#c89040');
+  tG.addColorStop(0.3, '#b07830');
+  tG.addColorStop(1,   '#8a5818');
+  ctx.fillStyle = tG;
+  ctx.beginPath();
+  ctx.roundRect(0, tableTop, W, tableH, [0, 0, 4, 4]);
+  ctx.fill();
+
+  // Wood grain lines on table
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, tableTop, W, tableH); ctx.clip();
+  for (let g = 0; g < 16; g++) {
+    const gx = (g / 15) * W * 1.1 - W * 0.05;
+    ctx.strokeStyle = `rgba(${g % 2 === 0 ? '80,40,0' : '180,120,30'},0.10)`;
+    ctx.lineWidth = 1 + (g % 3) * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(gx + Math.sin(g) * 6, tableTop);
+    ctx.lineTo(gx + Math.sin(g + 1) * 4, tableTop + tableH);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Table top front edge — darker band
+  ctx.fillStyle = '#7a4818';
+  ctx.fillRect(0, tableTop + tableH - 6, W, 6);
+
+  // Table top highlight strip
+  ctx.fillStyle = 'rgba(255,230,150,0.22)';
+  ctx.fillRect(0, tableTop, W, 3);
+
+  // Table edge highlight (left/right bevels)
+  ctx.fillStyle = 'rgba(255,230,150,0.12)';
+  ctx.fillRect(0, tableTop, 6, tableH);
+  ctx.fillRect(W - 6, tableTop, 6, tableH);
+
+  // ── FLOOR VISIBLE BELOW TABLE ─────────────────────────────────────
+  // Dark floor continuing behind/under the table
+  ctx.fillStyle = '#1e1c18';
+  ctx.fillRect(0, legY + legH, W, H - (legY + legH));
+
+  // Vignette at very bottom
+  const vigG = ctx.createLinearGradient(0, H * 0.9, 0, H);
+  vigG.addColorStop(0, 'rgba(0,0,0,0)'); vigG.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = vigG; ctx.fillRect(0, H * 0.9, W, H * 0.1);
 }
 
 function drawJar(cx, cy, r, angle) {
