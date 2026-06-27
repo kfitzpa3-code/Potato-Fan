@@ -164,6 +164,7 @@
   <div id="ammo-block"></div>
 </div>
 <div id="hint">Swipe up to throw</div>
+<div id="speech-test" onclick="testSpeech()" style="position:fixed;bottom:140px;left:50%;transform:translateX(-50%);background:rgba(30,20,5,0.9);border:1px solid #f0c840;border-radius:8px;padding:8px 18px;color:#f0c840;font-size:13px;z-index:20;cursor:pointer;">🔊 Test Voice</div>
 <div id="item-select">
   <div class="item-btn active" id="btn-potato">🥔</div>
   <div class="item-btn" id="btn-tomato">🍅</div>
@@ -376,6 +377,34 @@ function speak(text, accentHints) {
     if (voice) utt.voice = voice;
     setTimeout(() => { try { window.speechSynthesis.speak(utt); } catch(e) {} }, 60);
   } catch(e) {}
+}
+
+function testSpeech() {
+  const btn = document.getElementById('speech-test');
+  if (!window.speechSynthesis) { btn.textContent = '❌ No speechSynthesis'; return; }
+  loadVoices();
+  const voices = cachedVoices;
+  btn.textContent = `🔊 ${voices.length} voices`;
+  if (voices.length === 0) {
+    btn.textContent = '❌ 0 voices — try again';
+    // Force a reload of voices
+    setTimeout(() => {
+      loadVoices();
+      btn.textContent = `voices: ${cachedVoices.length}`;
+    }, 500);
+    return;
+  }
+  // Speak directly — no accent logic, just raw speak to test
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance('Potato Fan!');
+  utt.volume = 1;
+  utt.rate = 1;
+  utt.pitch = 1;
+  utt.voice = voices.find(v => /en/i.test(v.lang)) || voices[0];
+  utt.onstart = () => { btn.textContent = '🗣️ Speaking...'; };
+  utt.onend   = () => { btn.textContent = `✅ ${utt.voice ? utt.voice.name : 'default'}`; };
+  utt.onerror = (e) => { btn.textContent = `❌ Error: ${e.error}`; };
+  window.speechSynthesis.speak(utt);
 }
 
 function speakPotatoCall() {
