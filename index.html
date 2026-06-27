@@ -296,15 +296,18 @@ window.addEventListener('mouseup', dialPointerEnd);
 
 drawDial();
 const POTATO_CALLS = [
-  'Potato!',
-  'Youse guys!',
+  'Poh-tay-toe!',
+  'Yoose guys!',
   'Kom-boo-cha!',    // spelled phonetically so TTS says it right
   'Whole Hog!',
   'Flap Back!',
   'Dental Plan!',
-  'Fellas!',
-  'Schemick!',
-  'Renzo!',
+  'Fellllas!',
+  'Scchhemick!',
+  'Rennn-zo!',
+  'Potato Fan!!',
+  'Oh my goodness!',
+  'Good heavens!',
 ];
 let lastCallIndex = -1;
 let milestoneSpoken = false;  // tracks whether 100pt cue has fired this round
@@ -372,7 +375,8 @@ function pickVoice(hints) {
 
 function speak(text, accentHints) {
   if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
+  // Only cancel if something is already mid-speech (don't kill the unlock dummy)
+  if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
   const poolIdx = accentHints ? 0 : (accentIndex % ACCENT_POOLS.length);
   const hints = accentHints || ACCENT_POOLS[poolIdx];
@@ -382,7 +386,8 @@ function speak(text, accentHints) {
   utt.volume = 1.0;
   const v = pickVoice(hints);
   if (v) utt.voice = v;
-  window.speechSynthesis.speak(utt);
+  // Small delay gives the browser time to process after unlock
+  setTimeout(() => window.speechSynthesis.speak(utt), 80);
 }
 
 function speakPotatoCall() {
@@ -415,11 +420,13 @@ function unlockAudio() {
     src.start(0);
     ac.resume().then(() => { audioUnlocked = true; });
   } catch(e) {}
-  // Also prime speech synthesis
+  // Also prime speech synthesis with a real but inaudible utterance
   if (window.speechSynthesis) {
-    const dummy = new SpeechSynthesisUtterance('');
-    dummy.volume = 0;
-    try { window.speechSynthesis.speak(dummy); } catch(e) {}
+    const dummy = new SpeechSynthesisUtterance('.');
+    dummy.volume = 0.01;
+    dummy.rate = 2;
+    dummy.onend = () => { /* queue is open */ };
+    try { window.speechSynthesis.cancel(); window.speechSynthesis.speak(dummy); } catch(e) {}
   }
 }
 
@@ -645,8 +652,8 @@ function knockItem(item, impactVx, impactVy) {
   item.phys = {
     px: item.x * W + (item.w * W) / 2,
     py: item.y * H + (item.h * H) / 2,
-    vx: impactVx * (0.8 + Math.random() * 0.5) + sidewaysBoost,
-    vy: Math.min(impactVy * 0.3, 0) + (Math.random() * 2 - 3), // mostly downward or flat
+    vx: impactVx * (1.0 + Math.random() * 0.6) + sidewaysBoost,
+    vy: (Math.random() * 1 - 1.5), // flat to slightly downward — slides off counter
     angle: 0,
     spin: sideDir * (0.2 + Math.random() * 0.35),
     w: item.w * W,
@@ -1723,10 +1730,17 @@ function updateProjectile(p) {
     p.hitFan = true; // now it can hit things
   }
 
-  // Only interact with kitchen after hitting the fan
+  // Only remove if way off screen before fan hit
   if (!p.hitFan) {
-    // Still remove if it goes completely off screen without hitting fan
-    if (p.y < -100 || p.x < -300 || p.x > W+300 || p.y > H) return true;
+    if (p.y < -150 || p.x < -300 || p.x > W+300) return true;
+    // Still allow cabinet hits before fan (they're on the way)
+    if (p.x > CABINET_ZONE.x * W && p.x < CABINET_ZONE.w * W &&
+        p.y > CABINET_ZONE.y * H && p.y < (CABINET_ZONE.y + CABINET_ZONE.h) * H) {
+      hitCabinet(p.x, p.y, p.type === 'tomato');
+      p.vx = Math.abs(p.vx) * 0.5;
+      p.vy *= 0.6;
+      p.hitFan = true; // cabinet counts as "first hit" now
+    }
     return false;
   }
 
@@ -1756,7 +1770,7 @@ function updateProjectile(p) {
   // Kitchen item hits
   for (let item of kitchenItems) {
     if (item.hit) continue;
-    const ix = item.x*W, iy = item.y*H, iw = item.w*W, ih = item.h*H;
+    const ix = item.x*W - 4, iy = item.y*H - 4, iw = item.w*W + 8, ih = item.h*H + 8;
     if (p.x > ix && p.x < ix+iw && p.y > iy && p.y < iy+ih) {
       item.hit = true;
       const pts = p.type==='tomato' ? item.pts*4 : item.pts;
