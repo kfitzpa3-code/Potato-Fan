@@ -298,12 +298,16 @@ drawDial();
 const POTATO_CALLS = [
   'Potato!',
   'Youse guys!',
-  'Kombucha!',
+  'Kom-boo-cha!',    // spelled phonetically so TTS says it right
   'Whole Hog!',
   'Flap Back!',
   'Dental Plan!',
+  'Fellas!',
+  'Schemick!',
+  'Renzo!',
 ];
 let lastCallIndex = -1;
+let milestoneSpoken = false;  // tracks whether 100pt cue has fired this round
 let cachedVoices = [];
 let accentIndex = 0;
 
@@ -1779,23 +1783,23 @@ function drawThrowPreview() {
   const isTomato = selectedItem === 'tomato';
   const r = isTomato ? 18 : 20;
 
-  // Draw the item at touch-down point — glowing so it's visible
+  // Glow ring — own save/restore so it never bleeds into jar drawing
   ctx.save();
-  // Glow ring
   ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.008) * 0.2;
   ctx.strokeStyle = isTomato ? '#ff6060' : '#f0c840';
   ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(sx, sy, r + 8, 0, Math.PI*2); ctx.stroke();
-  ctx.globalAlpha = 1;
+  ctx.restore(); // always restore before drawing item
 
-  // The item itself
+  // The item itself — fresh context state
   if (isTomato) {
-    ctx.restore();
     drawJar(sx, sy, r, 0);
   } else {
+    ctx.save();
     ctx.fillStyle = '#8B6914';
     ctx.beginPath(); ctx.ellipse(sx, sy, r*1.3, r, 0.3, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = '#7a5510'; ctx.fillRect(sx-3, sy-2, 6, 4);
+    ctx.restore();
   }
 
   // Arc preview dots if swiping upward
@@ -1803,6 +1807,7 @@ function drawThrowPreview() {
     const len = Math.sqrt(dx*dx+dy*dy);
     const speed = Math.min(len * 0.18, 22);
     const vx = (dx/len)*speed, vy = (dy/len)*speed;
+    ctx.save();
     ctx.fillStyle = isTomato ? 'rgba(220,80,80,0.5)' : 'rgba(200,160,60,0.5)';
     let px = sx, py = sy, pvx = vx, pvy = vy;
     for (let i = 0; i < 18; i++) {
@@ -1813,8 +1818,8 @@ function drawThrowPreview() {
       ctx.globalAlpha = 0.6 * (1 - i/18);
       ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI*2); ctx.fill();
     }
+    ctx.restore();
   }
-  ctx.restore();
 }
 
 function throwItem(sx, sy, dx, dy) {
@@ -1866,7 +1871,14 @@ function selectItem(type) {
 })();
 
 // ─── UI ───────────────────────────────────────────────────────────
-function updateScoreDisplay() { document.getElementById('score-display').textContent = score; }
+function updateScoreDisplay() {
+  document.getElementById('score-display').textContent = score;
+  // 100pt milestone cue
+  if (!milestoneSpoken && score >= 100) {
+    milestoneSpoken = true;
+    setTimeout(() => speak("Somebody's doing well!", ['Samantha','Alex','en-US','Nathan']), 300);
+  }
+}
 
 function updateAmmoDisplay() {
   const ab = document.getElementById('ammo-block');
@@ -1948,6 +1960,7 @@ function startGame() {
   selectedItem = 'potato'; projectiles = []; debris = []; floatingTexts = [];
   hitEffects = []; kitchenDamage = []; glassShards = []; fanSpeed = 0.03;
   WIN.broken = false; WIN.crackLines = null;
+  milestoneSpoken = false;
   buildKitchen();
   updateScoreDisplay(); updateAmmoDisplay(); selectItem('potato');
   document.getElementById('hint').style.opacity = '1';
