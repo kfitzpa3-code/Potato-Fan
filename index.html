@@ -311,18 +311,48 @@ let milestoneSpoken = false;  // tracks whether 100pt cue has fired this round
 let cachedVoices = [];
 let accentIndex = 0;
 
-// Accent pools — rotate through different accents each throw
+// Accent pools — lots of variety, rotate each throw
 const ACCENT_POOLS = [
-  ['Daniel', 'Arthur', 'en-GB', 'British'],
+  // British
+  ['Daniel', 'Arthur', 'en-GB', 'British', 'Oliver'],
+  // Australian
   ['Karen', 'Matilda', 'en-AU', 'Australian'],
-  ['Samantha', 'Alex', 'en-US', 'Nathan'],
+  // Canadian — en-CA, or fall back to US voices with a maple twist
+  ['en-CA', 'Samantha', 'Nathan', 'Nicky'],
+  // Southern US / country twang
+  ['Zira', 'en-US', 'Alex', 'Tom', 'Samantha'],
+  // Irish
   ['Moira', 'Fiona', 'en-IE', 'Irish'],
-  ['Rishi', 'en-IN', 'Veena', 'Indian'],
+  // Scottish
+  ['Fiona', 'en-GB-scotland', 'en-GB', 'Malcolm'],
+  // Indian
+  ['Rishi', 'en-IN', 'Veena', 'Lekha'],
+  // Japanese / East Asian fallback
+  ['Kyoko', 'O-Ren', 'en-US', 'Ava', 'Allison'],
+  // Deep south / Texan — just US voices with exaggerated pitch
+  ['en-US', 'Tom', 'Alex', 'Fred'],
+  // French Canadian
+  ['Amelie', 'fr-CA', 'Thomas', 'en-CA'],
 ];
+
+// Per-pool pitch/rate modifiers to make each accent feel distinct and silly
+const ACCENT_MODS = [
+  { rate: [0.88, 0.96], pitch: [0.85, 1.0]  },  // British — measured, low
+  { rate: [1.05, 1.20], pitch: [1.0,  1.3]  },  // Australian — bright and fast
+  { rate: [0.90, 1.05], pitch: [0.90, 1.1]  },  // Canadian — pleasant, eh
+  { rate: [0.80, 0.92], pitch: [0.75, 0.95] },  // Country — slow drawl, low
+  { rate: [0.95, 1.10], pitch: [1.1,  1.4]  },  // Irish — lilting, high
+  { rate: [0.82, 0.95], pitch: [0.80, 1.0]  },  // Scottish — gruff
+  { rate: [1.0,  1.15], pitch: [1.0,  1.3]  },  // Indian — melodic
+  { rate: [1.1,  1.3],  pitch: [1.2,  1.6]  },  // East Asian — fast and high
+  { rate: [0.70, 0.85], pitch: [0.60, 0.80] },  // Texan — very slow, very low
+  { rate: [1.05, 1.2],  pitch: [1.1,  1.5]  },  // French Canadian — rapid, nasal
+];
+
+function rnd(a, b) { return a + Math.random() * (b - a); }
 
 function loadVoices() {
   if (window.speechSynthesis) {
-    const v = window.speechSynthesis.getVoices();
     if (v.length) cachedVoices = v;
   }
 }
@@ -344,10 +374,12 @@ function speak(text, accentHints) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.rate  = 0.92 + Math.random() * 0.18;
-  utt.pitch = 0.80 + Math.random() * 0.35;
+  const poolIdx = accentHints ? 0 : (accentIndex % ACCENT_POOLS.length);
+  const hints = accentHints || ACCENT_POOLS[poolIdx];
+  const mods = ACCENT_MODS[accentHints ? 0 : poolIdx] || ACCENT_MODS[0];
+  utt.rate   = rnd(mods.rate[0],  mods.rate[1]);
+  utt.pitch  = rnd(mods.pitch[0], mods.pitch[1]);
   utt.volume = 1.0;
-  const hints = accentHints || ACCENT_POOLS[accentIndex % ACCENT_POOLS.length];
   const v = pickVoice(hints);
   if (v) utt.voice = v;
   window.speechSynthesis.speak(utt);
@@ -607,19 +639,66 @@ buildKitchen();
 // ─── PHYSICS ITEMS ────────────────────────────────────────────────
 function knockItem(item, impactVx, impactVy) {
   if (item.phys) return;
-  const isPotato = Math.abs(impactVx) + Math.abs(impactVy) > 0; // always true
+  // Bias strongly sideways — objects should slide and fall, not just pop up
+  const sideDir = impactVx >= 0 ? 1 : -1;
+  const sidewaysBoost = (3 + Math.random() * 5) * sideDir;
   item.phys = {
     px: item.x * W + (item.w * W) / 2,
     py: item.y * H + (item.h * H) / 2,
-    vx: impactVx * (1.2 + Math.random() * 0.6),
-    vy: Math.min(impactVy * 0.5, -3) - 6 - Math.random() * 5,
+    vx: impactVx * (0.8 + Math.random() * 0.5) + sidewaysBoost,
+    vy: Math.min(impactVy * 0.3, 0) + (Math.random() * 2 - 3), // mostly downward or flat
     angle: 0,
-    spin: (Math.random() - 0.5) * 0.4,
+    spin: sideDir * (0.2 + Math.random() * 0.35),
     w: item.w * W,
     h: item.h * H,
     bounces: 0,
     settled: false
   };
+}
+
+// Cabinet hit zone — left side of screen, wall area
+const CABINET_ZONE = { x: 0, y: 0.08, w: 0.30, h: 0.50 };
+let cabinetDamages = []; // persistent scuffs/dents on cabinets
+
+function hitCabinet(px, py, isTomato) {
+  // Add a damage mark to the cabinet
+  cabinetDamages.push({ x: px, y: py, r: 6 + Math.random()*10, isTomato, angle: Math.random()*Math.PI*2 });
+  const pts = isTomato ? 18 : 6;
+  score += pts;
+  updateScoreDisplay();
+  spawnFloatingText('+' + pts + (isTomato ? ' 🍅' : ''), px, py, isTomato ? '#e74c3c' : '#f0c060');
+  spawnHit(px, py, isTomato);
+  addKitchenDamage(px, py, isTomato);
+  if (isTomato) playTomatoSplat(px); else playCrash(px);
+}
+
+function drawCabinetDamage() {
+  for (const d of cabinetDamages) {
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    if (d.isTomato) {
+      ctx.fillStyle = '#7a1010';
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i/6)*Math.PI*2, r = d.r*(0.6+Math.random()*0.4);
+        i === 0 ? ctx.moveTo(d.x+Math.cos(a)*r, d.y+Math.sin(a)*r)
+                : ctx.lineTo(d.x+Math.cos(a)*r, d.y+Math.sin(a)*r);
+      }
+      ctx.closePath(); ctx.fill();
+    } else {
+      ctx.strokeStyle = '#2a1000'; ctx.lineWidth = 1.5;
+      ctx.translate(d.x, d.y); ctx.rotate(d.angle);
+      for (let i = 0; i < 5; i++) {
+        const a = d.angle + i * Math.PI/2.5;
+        ctx.beginPath(); ctx.moveTo(0,0);
+        ctx.lineTo(Math.cos(a)*d.r*1.3, Math.sin(a)*d.r*1.3);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#3a1800';
+      ctx.beginPath(); ctx.arc(0, 0, d.r*0.4, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
 }
 
 function updatePhysicsItems() {
@@ -1651,6 +1730,15 @@ function updateProjectile(p) {
     return false;
   }
 
+  // Cabinet hit — left wall zone
+  if (p.x > CABINET_ZONE.x * W && p.x < CABINET_ZONE.w * W &&
+      p.y > CABINET_ZONE.y * H && p.y < (CABINET_ZONE.y + CABINET_ZONE.h) * H) {
+    hitCabinet(p.x, p.y, p.type === 'tomato');
+    // Bounce off cabinet face
+    p.vx = Math.abs(p.vx) * 0.5; // always bounce rightward
+    p.vy *= 0.6;
+  }
+
   // Window hit
   if (!WIN.broken &&
       p.x > WIN.x && p.x < WIN.x + WIN.w &&
@@ -1902,6 +1990,7 @@ function loop(ts) {
   ctx.clearRect(0, 0, W, H);
   drawKitchen();
   for (let item of kitchenItems) drawItem(item);
+  drawCabinetDamage();
   drawKitchenDamage();
   drawFan();
   drawHitEffects();
@@ -1961,6 +2050,7 @@ function startGame() {
   hitEffects = []; kitchenDamage = []; glassShards = []; fanSpeed = 0.03;
   WIN.broken = false; WIN.crackLines = null;
   milestoneSpoken = false;
+  cabinetDamages = [];
   buildKitchen();
   updateScoreDisplay(); updateAmmoDisplay(); selectItem('potato');
   document.getElementById('hint').style.opacity = '1';
