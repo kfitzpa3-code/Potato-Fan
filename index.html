@@ -179,6 +179,7 @@
     <div class="subtitle">KITCHEN CARNAGE</div>
     <button class="btn" onclick="startGame()">PLAY</button>
     <button class="btn btn-secondary" onclick="showLeaderboard()">LEADERBOARD</button>
+    <p style="color:#806830;font-size:11px;margin-top:16px;text-align:center;line-height:1.5;">📢 iPhone: check your mute switch<br>is OFF for voice calls</p>
   </div>
   <div id="leaderboard-screen">
     <h2>🏆 Leaderboard</h2>
@@ -2095,6 +2096,13 @@ async function sbInsertScore(name, score) {
 // ─── GAME FLOW ────────────────────────────────────────────────────
 function startGame() {
   unlockAudio();
+  // Unlock speechSynthesis with a silent utterance on PLAY tap (reliable iOS gesture)
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0.01; u.rate = 2;
+    window.speechSynthesis.speak(u);
+  }
   score = 0; potatoes = POTATO_COUNT; tomatoes = TOMATO_COUNT;
   selectedItem = 'potato'; projectiles = []; debris = []; floatingTexts = [];
   hitEffects = []; kitchenDamage = []; glassShards = []; fanSpeed = 0.03;
