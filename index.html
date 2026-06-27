@@ -63,6 +63,17 @@
   .item-btn.active { border-color: #f0c840; transform: scale(1.12); }
   .item-btn.empty { opacity: 0.28; pointer-events: none; }
 
+  #fan-dial-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  #fan-dial {
+    width: 56px; height: 56px; cursor: pointer; touch-action: none;
+    border-radius: 50%;
+  }
+  #fan-dial-label {
+    font-size: 9px; color: rgba(220,190,100,0.75); letter-spacing: 2px;
+  }
+
   /* ── OVERLAY ── */
   #overlay {
     position: fixed; inset: 0;
@@ -156,6 +167,10 @@
 <div id="item-select">
   <div class="item-btn active" id="btn-potato">🥔</div>
   <div class="item-btn" id="btn-tomato">🍅</div>
+  <div id="fan-dial-wrap">
+    <canvas id="fan-dial" width="56" height="56"></canvas>
+    <div id="fan-dial-label">FAN</div>
+  </div>
 </div>
 <div id="overlay">
   <div class="overlay-card">
@@ -189,7 +204,97 @@ function resize() { W = canvas.width = window.innerWidth; H = canvas.height = wi
 resize();
 window.addEventListener('resize', resize);
 
-// ─── SPEECH ───────────────────────────────────────────────────────
+// ─── FAN SPEED DIAL ───────────────────────────────────────────────
+const dialCanvas = document.getElementById('fan-dial');
+const dialCtx = dialCanvas.getContext('2d');
+let fanSpeedTarget = 0.035; // base idle speed
+let dialAngle = -Math.PI * 0.75; // knob position (maps min→max)
+const DIAL_MIN = 0.015;
+const DIAL_MAX = 0.12;
+const DIAL_ANGLE_MIN = -Math.PI * 0.8;
+const DIAL_ANGLE_MAX = Math.PI * 0.8;
+
+function dialAngleToSpeed(a) {
+  const t = (a - DIAL_ANGLE_MIN) / (DIAL_ANGLE_MAX - DIAL_ANGLE_MIN);
+  return DIAL_MIN + t * (DIAL_MAX - DIAL_MIN);
+}
+
+function drawDial() {
+  const dc = dialCtx;
+  const W2 = 56, H2 = 56, cx = 28, cy = 28, r = 24;
+  dc.clearRect(0, 0, W2, H2);
+
+  // Outer ring
+  const ringG = dc.createRadialGradient(cx-4, cy-4, 4, cx, cy, r);
+  ringG.addColorStop(0, '#5a4020'); ringG.addColorStop(1, '#2a1808');
+  dc.fillStyle = ringG;
+  dc.beginPath(); dc.arc(cx, cy, r, 0, Math.PI*2); dc.fill();
+
+  // Tick marks
+  dc.strokeStyle = 'rgba(200,160,60,0.4)'; dc.lineWidth = 1.5;
+  for (let i = 0; i <= 8; i++) {
+    const a = DIAL_ANGLE_MIN + (i/8)*(DIAL_ANGLE_MAX - DIAL_ANGLE_MIN);
+    const inner = i % 4 === 0 ? r*0.62 : r*0.72;
+    dc.beginPath();
+    dc.moveTo(cx + Math.cos(a)*inner, cy + Math.sin(a)*inner);
+    dc.lineTo(cx + Math.cos(a)*(r-3), cy + Math.sin(a)*(r-3));
+    dc.stroke();
+  }
+
+  // Arc showing current value
+  dc.strokeStyle = '#f0c840'; dc.lineWidth = 2.5;
+  dc.beginPath();
+  dc.arc(cx, cy, r*0.82, DIAL_ANGLE_MIN, dialAngle);
+  dc.stroke();
+
+  // Knob face
+  const knobG = dc.createRadialGradient(cx-3, cy-3, 2, cx, cy, r*0.55);
+  knobG.addColorStop(0, '#c8a040'); knobG.addColorStop(1, '#6a4010');
+  dc.fillStyle = knobG;
+  dc.beginPath(); dc.arc(cx, cy, r*0.52, 0, Math.PI*2); dc.fill();
+
+  // Pointer line
+  dc.strokeStyle = '#f0f0e0'; dc.lineWidth = 2.5; dc.lineCap = 'round';
+  dc.beginPath();
+  dc.moveTo(cx + Math.cos(dialAngle)*r*0.15, cy + Math.sin(dialAngle)*r*0.15);
+  dc.lineTo(cx + Math.cos(dialAngle)*r*0.44, cy + Math.sin(dialAngle)*r*0.44);
+  dc.stroke();
+
+  // Center dot
+  dc.fillStyle = '#2a1808';
+  dc.beginPath(); dc.arc(cx, cy, 3, 0, Math.PI*2); dc.fill();
+}
+
+// Dial interaction — drag to rotate
+let dialDragging = false, dialStartY = 0, dialStartAngle = 0;
+
+function dialPointerStart(e) {
+  e.preventDefault(); e.stopPropagation();
+  dialDragging = true;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  dialStartY = clientY; dialStartAngle = dialAngle;
+  unlockAudio();
+}
+function dialPointerMove(e) {
+  if (!dialDragging) return;
+  e.preventDefault();
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const dy = dialStartY - clientY; // drag up = increase
+  const range = DIAL_ANGLE_MAX - DIAL_ANGLE_MIN;
+  dialAngle = Math.max(DIAL_ANGLE_MIN, Math.min(DIAL_ANGLE_MAX, dialStartAngle + dy * 0.03));
+  fanSpeedTarget = dialAngleToSpeed(dialAngle);
+  drawDial();
+}
+function dialPointerEnd(e) { dialDragging = false; }
+
+dialCanvas.addEventListener('touchstart', dialPointerStart, { passive: false });
+dialCanvas.addEventListener('touchmove', dialPointerMove, { passive: false });
+dialCanvas.addEventListener('touchend', dialPointerEnd);
+dialCanvas.addEventListener('mousedown', dialPointerStart);
+window.addEventListener('mousemove', dialPointerMove);
+window.addEventListener('mouseup', dialPointerEnd);
+
+drawDial();
 const POTATO_CALLS = [
   'Potato!',
   'Youse guys!',
@@ -199,34 +304,57 @@ const POTATO_CALLS = [
   'Dental Plan!',
 ];
 let lastCallIndex = -1;
+let cachedVoices = [];
+let accentIndex = 0;
 
-function speak(text) {
+// Accent pools — rotate through different accents each throw
+const ACCENT_POOLS = [
+  ['Daniel', 'Arthur', 'en-GB', 'British'],
+  ['Karen', 'Matilda', 'en-AU', 'Australian'],
+  ['Samantha', 'Alex', 'en-US', 'Nathan'],
+  ['Moira', 'Fiona', 'en-IE', 'Irish'],
+  ['Rishi', 'en-IN', 'Veena', 'Indian'],
+];
+
+function loadVoices() {
+  if (window.speechSynthesis) {
+    const v = window.speechSynthesis.getVoices();
+    if (v.length) cachedVoices = v;
+  }
+}
+if (window.speechSynthesis) {
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+  setTimeout(loadVoices, 100);
+}
+
+function pickVoice(hints) {
+  if (!cachedVoices.length) loadVoices();
+  for (const hint of hints) {
+    const v = cachedVoices.find(v => new RegExp(hint, 'i').test(v.name + ' ' + (v.lang||'')));
+    if (v) return v;
+  }
+  return cachedVoices.length ? cachedVoices[Math.floor(Math.random() * cachedVoices.length)] : null;
+}
+
+function speak(text, accentHints) {
   if (!window.speechSynthesis) return;
-  // Cancel any currently speaking
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.rate = 1.1;
-  utt.pitch = 1.0;
+  utt.rate  = 0.92 + Math.random() * 0.18;
+  utt.pitch = 0.80 + Math.random() * 0.35;
   utt.volume = 1.0;
-  // Pick a slightly gruff voice if available
-  const voices = window.speechSynthesis.getVoices();
-  const preferred = voices.find(v => /male|daniel|fred|ralph|junior/i.test(v.name));
-  if (preferred) utt.voice = preferred;
+  const hints = accentHints || ACCENT_POOLS[accentIndex % ACCENT_POOLS.length];
+  const v = pickVoice(hints);
+  if (v) utt.voice = v;
   window.speechSynthesis.speak(utt);
 }
 
 function speakPotatoCall() {
-  // Pick randomly but don't repeat same one twice in a row
   let idx;
-  do { idx = Math.floor(Math.random() * POTATO_CALLS.length); } while (idx === lastCallIndex);
+  do { idx = Math.floor(Math.random() * POTATO_CALLS.length); } while (idx === lastCallIndex && POTATO_CALLS.length > 1);
   lastCallIndex = idx;
+  accentIndex++;
   speak(POTATO_CALLS[idx]);
-}
-
-// Pre-load voices (browsers load async)
-if (window.speechSynthesis) {
-  window.speechSynthesis.getVoices();
-  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
 }
 let audioCtx = null;
 let audioUnlocked = false;
@@ -456,19 +584,18 @@ let WIN = { x:0, y:0, w:0, h:0, broken:false };
 const kitchenItems = [];
 function buildKitchen() {
   kitchenItems.length = 0;
-  // y positions adjusted to sit on 3D countertop (horizon - 0.06 = ~0.46)
-  const counterY = 0.50; // top of counter surface
-  const shelfY   = 0.41; // shelf
-  kitchenItems.push({ type:'jar',     x:0.04, y:counterY,   w:0.05, h:0.075, pts:22,  sound:'crash' });
-  kitchenItems.push({ type:'jar',     x:0.11, y:counterY,   w:0.05, h:0.082, pts:22,  sound:'crash' });
-  kitchenItems.push({ type:'plate',   x:0.70, y:shelfY,     w:0.09, h:0.04,  pts:35, sound:'crash' });
-  kitchenItems.push({ type:'plate',   x:0.82, y:shelfY-0.02,w:0.09, h:0.04,  pts:35, sound:'crash' });
-  kitchenItems.push({ type:'mug',     x:0.68, y:counterY,   w:0.065,h:0.07,  pts:28, sound:'crash' });
-  kitchenItems.push({ type:'pot',     x:0.57, y:counterY-0.01,w:0.11,h:0.09, pts:40, sound:'metal' });
-  kitchenItems.push({ type:'bowl',    x:0.28, y:counterY-0.01,w:0.13,h:0.065,pts:28, sound:'crash' });
-  kitchenItems.push({ type:'toaster', x:0.16, y:counterY,   w:0.10, h:0.07,  pts:50, sound:'metal' });
-  kitchenItems.push({ type:'clock',   x:0.43, y:0.14,       w:0.08, h:0.09,  pts:60, sound:'crash' });
-  kitchenItems.push({ type:'plant',   x:0.87, y:counterY-0.05,w:0.08,h:0.13, pts:18,  sound:'thud'  });
+  const counterY = 0.50;
+  const shelfY   = 0.41;
+  kitchenItems.push({ type:'jar',     x:0.04, y:counterY,      w:0.06, h:0.09,  pts:22, sound:'crash' });
+  kitchenItems.push({ type:'jar',     x:0.12, y:counterY,      w:0.06, h:0.10,  pts:22, sound:'crash' });
+  kitchenItems.push({ type:'plate',   x:0.69, y:shelfY,        w:0.10, h:0.05,  pts:35, sound:'crash' });
+  kitchenItems.push({ type:'plate',   x:0.81, y:shelfY-0.02,   w:0.10, h:0.05,  pts:35, sound:'crash' });
+  kitchenItems.push({ type:'mug',     x:0.67, y:counterY,      w:0.08, h:0.09,  pts:28, sound:'crash' });
+  kitchenItems.push({ type:'pot',     x:0.56, y:counterY-0.02, w:0.13, h:0.11,  pts:40, sound:'metal' });
+  kitchenItems.push({ type:'bowl',    x:0.27, y:counterY-0.01, w:0.14, h:0.08,  pts:28, sound:'crash' });
+  kitchenItems.push({ type:'toaster', x:0.16, y:counterY,      w:0.11, h:0.08,  pts:50, sound:'metal' });
+  kitchenItems.push({ type:'clock',   x:0.42, y:0.12,          w:0.10, h:0.11,  pts:60, sound:'crash' });
+  kitchenItems.push({ type:'plant',   x:0.86, y:counterY-0.06, w:0.09, h:0.15,  pts:18, sound:'thud'  });
   for (let item of kitchenItems) { item.hit = false; item.phys = null; }
 }
 buildKitchen();
@@ -799,34 +926,28 @@ function drawKitchen() {
   const ctDepth = H*0.032;
 
   function drawGraniteCounter(x, w2) {
-    // Top face — granite speckle
-    ctx.save();
+    // Top face — solid granite colour, no random speckle each frame
+    const topG = ctx.createLinearGradient(x, ctY-ctDepth, x+w2, ctY);
+    topG.addColorStop(0,   '#c0b8a8');
+    topG.addColorStop(0.4, '#d4ccc0');
+    topG.addColorStop(1,   '#a8a090');
+    ctx.fillStyle = topG;
     ctx.beginPath();
-    ctx.moveTo(x,ctY); ctx.lineTo(x+w2,ctY); ctx.lineTo(x+w2+ctDepth*.5,ctY-ctDepth); ctx.lineTo(x+ctDepth*.5,ctY-ctDepth);
-    ctx.closePath(); ctx.clip();
-    // Granite base — dark grey-beige
-    ctx.fillStyle='#b8b0a0'; ctx.fillRect(x,ctY-ctDepth,w2+ctDepth,ctDepth+2);
-    // Speckle
-    for (let s=0;s<60;s++) {
-      const sx=x+Math.random()*w2, sy=ctY-ctDepth+Math.random()*ctDepth;
-      ctx.fillStyle=`rgba(${40+Math.random()*60},${30+Math.random()*40},${20+Math.random()*30},0.5)`;
-      ctx.fillRect(sx,sy,1+Math.random()*3,1);
-    }
-    ctx.restore();
-    // Front face
-    const ctG=ctx.createLinearGradient(x,ctY,x,ctY+ctH);
-    ctG.addColorStop(0,'#a0988a'); ctG.addColorStop(1,'#807870');
-    ctx.fillStyle=ctG; ctx.fillRect(x,ctY,w2,ctH);
-    // Front face speckle
-    ctx.save(); ctx.beginPath(); ctx.rect(x,ctY,w2,ctH); ctx.clip();
-    for (let s=0;s<30;s++) {
-      ctx.fillStyle=`rgba(40,30,20,0.15)`;
-      ctx.fillRect(x+Math.random()*w2, ctY+Math.random()*ctH, 2, 1);
-    }
-    ctx.restore();
+    ctx.moveTo(x,ctY); ctx.lineTo(x+w2,ctY);
+    ctx.lineTo(x+w2+ctDepth*.5, ctY-ctDepth);
+    ctx.lineTo(x+ctDepth*.5, ctY-ctDepth);
+    ctx.closePath(); ctx.fill();
+    // Front face — solid gradient
+    const ctG = ctx.createLinearGradient(x, ctY, x, ctY+ctH);
+    ctG.addColorStop(0, '#a8a098'); ctG.addColorStop(1, '#888078');
+    ctx.fillStyle = ctG; ctx.fillRect(x, ctY, w2, ctH);
     // Top edge highlight
-    ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.moveTo(x,ctY); ctx.lineTo(x+w2,ctY); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, ctY); ctx.lineTo(x+w2, ctY); ctx.stroke();
+    // Shadow under counter
+    const shG = ctx.createLinearGradient(x, ctY+ctH, x, ctY+ctH+8);
+    shG.addColorStop(0,'rgba(0,0,0,0.18)'); shG.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = shG; ctx.fillRect(x, ctY+ctH, w2, 8);
   }
 
   drawGraniteCounter(0, W*0.5);
@@ -1276,36 +1397,20 @@ function drawFan() {
 }
 
 function drawForeground() {
-  // Foreground counter edge — the surface the player is throwing from
-  const fgY = H * 0.76;
-  // Counter top surface
-  const fgGrad = ctx.createLinearGradient(0, fgY - H*0.025, 0, fgY);
-  fgGrad.addColorStop(0, '#d4a858');
-  fgGrad.addColorStop(1, '#b08838');
-  ctx.fillStyle = fgGrad;
-  ctx.fillRect(0, fgY - H*0.025, W, H*0.025);
+  // Thin ledge at the very bottom — just enough to frame the throw zone
+  const fgY = H * 0.86;
+  const ledgeH = H * 0.015; // thin top surface strip
 
-  // Counter face (front panel)
-  const faceGrad = ctx.createLinearGradient(0, fgY, 0, H);
-  faceGrad.addColorStop(0, '#7a5828');
-  faceGrad.addColorStop(0.3, '#6a4c20');
-  faceGrad.addColorStop(1, '#3a2810');
-  ctx.fillStyle = faceGrad;
-  ctx.fillRect(0, fgY, W, H - fgY);
+  // Counter top surface — just a narrow strip
+  const fgGrad = ctx.createLinearGradient(0, fgY, 0, fgY + ledgeH);
+  fgGrad.addColorStop(0, '#c8a050');
+  fgGrad.addColorStop(1, '#a07830');
+  ctx.fillStyle = fgGrad;
+  ctx.fillRect(0, fgY, W, ledgeH);
 
   // Top edge highlight
-  ctx.strokeStyle = 'rgba(255,230,150,0.35)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(0, fgY - H*0.025); ctx.lineTo(W, fgY - H*0.025); ctx.stroke();
-
-  // Subtle vignette on counter face
-  const vigGrad = ctx.createLinearGradient(0, fgY, 0, H);
-  vigGrad.addColorStop(0,   'rgba(0,0,0,0)');
-  vigGrad.addColorStop(1,   'rgba(0,0,0,0.45)');
-  ctx.fillStyle = vigGrad;
-  ctx.fillRect(0, fgY, W, H - fgY);
-
-  // Swipe arrow hint — only show at start
-  // (hint text rendered by DOM, this just adds a subtle arc)
+  ctx.strokeStyle = 'rgba(255,230,150,0.4)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, fgY); ctx.lineTo(W, fgY); ctx.stroke();
 }
 
 function drawJar(cx, cy, r, angle) {
@@ -1727,7 +1832,7 @@ function throwItem(sx, sy, dx, dy) {
     type: selectedItem,
     hitFan: false
   });
-  if (isTomato) { tomatoes--; speak('Stewed tomatoes!'); }
+  if (isTomato) { tomatoes--; speak('Stewed tomatoes!', ['Daniel', 'Arthur', 'en-GB', 'British']); }
   else { potatoes--; speakPotatoCall(); }
   updateAmmoDisplay();
   document.getElementById('hint').style.opacity = '0';
@@ -1796,7 +1901,9 @@ function loop(ts) {
   drawThrowPreview();
 
   fanAngle += fanSpeed;
-  fanSpeed = Math.max(0.025, fanSpeed * 0.998);
+  // Drift back toward dial target speed
+  fanSpeed += (fanSpeedTarget - fanSpeed) * 0.02;
+  fanSpeed = Math.max(fanSpeedTarget * 0.5, fanSpeed);
   projectiles = projectiles.filter(p => !updateProjectile(p));
   updatePhysicsItems();
   updateGlassShards();
