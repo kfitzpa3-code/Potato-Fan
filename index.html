@@ -297,19 +297,19 @@ window.addEventListener('mouseup', dialPointerEnd);
 
 drawDial();
 const POTATO_CALLS = [
-  'Poh... tay... TOE!!!',
-  'Yoos guys!',
-  'Kom... BOOO... cha!!!',
-  'WHOOOOLE Hooooog!!',
-  'FLAAAP Baaack!!',
-  'Deeental Plaaaan!!',
-  'FELLLLLLAS!!!',
-  'SCCHHEMICK!!!',
-  'Rennnnnnzo!!',
-  'POTATO FAAAAN!!!',
-  'Good... HEAVENS!!!',
-  'Somebody stop me!!!',
-  'Oh CANAAAAADA!!!',
+  'Potato.',
+  'Yoos guys.',
+  'Kom-boo-cha.',
+  'Whole... Hog.',
+  'Flap... Back.',
+  'Dental Plan.',
+  'Fellas.',
+  'Scchhemick.',
+  'Renzo.',
+  'Potato Fan.',
+  'Good heavens.',
+  'Somebody stop me.',
+  'Oh Canada.',
 ];
 let lastCallIndex = -1;
 let milestoneSpoken = false;
@@ -317,26 +317,26 @@ let cachedVoices = [];
 let accentIndex = 0;
 
 const ACCENT_POOLS = [
-  // British — posh and slow
-  { hints:['Daniel','Arthur','en-GB'],      rate:[0.72,0.82], pitch:[0.60,0.75] },
-  // Australian — fast and bright
-  { hints:['Karen','Matilda','en-AU'],       rate:[1.30,1.50], pitch:[1.30,1.60] },
-  // Canadian redneck — slow drawl, very nasal, low
-  { hints:['en-CA','Samantha','Nathan'],     rate:[0.60,0.72], pitch:[0.50,0.65] },
-  // Canadian redneck 2 — faster but still nasal
-  { hints:['en-CA','Nathan','Samantha'],     rate:[0.75,0.88], pitch:[0.55,0.70] },
-  // Irish — lilting and high
-  { hints:['Moira','Fiona','en-IE'],         rate:[1.10,1.30], pitch:[1.40,1.70] },
-  // Indian — melodic, fast
-  { hints:['Rishi','en-IN','Veena'],         rate:[1.20,1.40], pitch:[1.20,1.50] },
-  // East Asian — very fast, very high
-  { hints:['Kyoko','Ava','en-US'],           rate:[1.50,1.80], pitch:[1.60,2.00] },
-  // Deep redneck / country — extremely slow, very low
-  { hints:['Fred','en-US','Tom','Alex'],     rate:[0.50,0.65], pitch:[0.40,0.55] },
-  // Scottish — gruff and medium
-  { hints:['Fiona','en-GB'],                 rate:[0.80,0.95], pitch:[0.70,0.85] },
-  // Hyper excited — any voice cranked way up
-  { hints:['en-US','Samantha','Alex'],       rate:[1.60,1.90], pitch:[1.70,2.00] },
+  // British — measured, natural pace
+  { hints:['Daniel','Arthur','en-GB'],      rate:[0.82,0.90], pitch:[0.90,1.05] },
+  // Australian — relaxed and clear
+  { hints:['Karen','Matilda','en-AU'],       rate:[0.88,0.96], pitch:[1.00,1.15] },
+  // Canadian — easy going, slight drawl
+  { hints:['en-CA','Samantha','Nathan'],     rate:[0.78,0.88], pitch:[0.88,1.00] },
+  // Canadian redneck — slower drawl
+  { hints:['en-CA','Nathan','Samantha'],     rate:[0.70,0.80], pitch:[0.82,0.95] },
+  // Irish — lilting, natural
+  { hints:['Moira','Fiona','en-IE'],         rate:[0.85,0.95], pitch:[1.05,1.20] },
+  // Indian — melodic, moderate
+  { hints:['Rishi','en-IN','Veena'],         rate:[0.85,0.95], pitch:[1.00,1.15] },
+  // East Asian — clear, moderate pace
+  { hints:['Kyoko','Ava','en-US'],           rate:[0.90,1.00], pitch:[1.05,1.20] },
+  // Country / Southern — slow and low
+  { hints:['Fred','en-US','Tom','Alex'],     rate:[0.68,0.78], pitch:[0.80,0.92] },
+  // Scottish — gruff, moderate
+  { hints:['Fiona','en-GB'],                 rate:[0.80,0.90], pitch:[0.88,1.00] },
+  // Excited — enthusiastic but not chipmunk
+  { hints:['en-US','Samantha','Alex'],       rate:[0.95,1.05], pitch:[1.10,1.25] },
 ];
 
 function rnd(a, b) { return a + Math.random() * (b - a); }
