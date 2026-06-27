@@ -363,11 +363,11 @@ function pickVoice(hints) {
 function speak(text, accentHints) {
   if (!window.speechSynthesis) return;
   try {
+    // Cancel any current speech synchronously
     window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(text);
+
     let hints, rate, pitch;
     if (accentHints) {
-      // Direct hints passed in (e.g. stewed tomatoes — use British)
       hints = accentHints;
       rate  = [0.72, 0.82]; pitch = [0.60, 0.75];
     } else {
@@ -376,13 +376,21 @@ function speak(text, accentHints) {
       rate  = pool.rate;
       pitch = pool.pitch;
     }
+
+    // Build utterance synchronously — iOS requires this in the gesture stack
+    const utt = new SpeechSynthesisUtterance(text);
     utt.rate   = rnd(rate[0],  rate[1]);
     utt.pitch  = rnd(pitch[0], pitch[1]);
     utt.volume = 1.0;
+    utt.onerror = (e) => console.warn('TTS error:', e.error, text);
+
+    // Set voice synchronously if already loaded, else speak with default
     const voice = pickVoice(hints);
     if (voice) utt.voice = voice;
-    setTimeout(() => { try { window.speechSynthesis.speak(utt); } catch(e) {} }, 60);
-  } catch(e) {}
+
+    // Speak — no setTimeout, must stay in gesture call stack on iOS
+    window.speechSynthesis.speak(utt);
+  } catch(e) { console.warn('speak() threw:', e); }
 }
 
 
@@ -1919,20 +1927,24 @@ function drawThrowPreview() {
 function throwItem(sx, sy, dx, dy) {
   if (selectedItem==='potato' && potatoes<=0) return;
   if (selectedItem==='tomato' && tomatoes<=0) return;
+  const isTomato = selectedItem==='tomato';
+
+  // Speak FIRST — must be synchronous in the gesture call stack for iOS
+  if (isTomato) speak('Stewed tomatoes!', ['Daniel', 'Arthur', 'en-GB', 'British']);
+  else speakPotatoCall();
+
   const len = Math.sqrt(dx*dx+dy*dy);
   const speed = Math.min(len * 0.18, 22);
   const vx = (dx/len)*speed, vy = (dy/len)*speed;
-  const isTomato = selectedItem==='tomato';
   projectiles.push({
     x:sx, y:sy, vx, vy,
     angle: Math.atan2(vy,vx),
     spin:(Math.random()-0.5)*0.2,
-    r: isTomato ? 18 : 20,          // potato is now bigger
+    r: isTomato ? 18 : 20,
     type: selectedItem,
     hitFan: false
   });
-  if (isTomato) { tomatoes--; speak('Stewed tomatoes!', ['Daniel', 'Arthur', 'en-GB', 'British']); }
-  else { potatoes--; speakPotatoCall(); }
+  if (isTomato) tomatoes--; else potatoes--;
   updateAmmoDisplay();
   document.getElementById('hint').style.opacity = '0';
   if (potatoes<=0 && tomatoes<=0) setTimeout(endGame, 2500);
