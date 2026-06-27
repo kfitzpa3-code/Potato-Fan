@@ -2,96 +2,145 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Potato Fan</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: #1a0e05;
+    background: #2a1f0e;
     font-family: 'Georgia', serif;
     overflow: hidden;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    position: fixed; width: 100%; height: 100%;
   }
-  canvas { display: block; }
+  canvas { display: block; touch-action: none; }
+
+  /* ── HUD ── */
   #ui {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 12px 16px;
-    pointer-events: none;
-    z-index: 10;
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: env(safe-area-inset-top, 12px) 14px 0;
+    padding-top: max(env(safe-area-inset-top), 12px);
+    pointer-events: none; z-index: 10;
   }
   .score-block {
-    background: rgba(20,10,2,0.75);
-    border: 1px solid rgba(210,150,80,0.4);
-    border-radius: 8px;
-    padding: 8px 14px;
-    text-align: center;
+    background: rgba(30,20,5,0.82);
+    border: 1.5px solid rgba(180,140,60,0.5);
+    border-radius: 10px; padding: 7px 14px; text-align: center;
+    backdrop-filter: blur(4px);
   }
-  .score-label { font-size: 10px; color: #a07840; letter-spacing: 1px; text-transform: uppercase; }
-  .score-value { font-size: 22px; font-weight: bold; color: #f0c060; line-height: 1.1; }
-  #ammo-block { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
-  .ammo-row { display: flex; gap: 4px; }
-  .ammo-pip { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid rgba(210,150,80,0.5); }
-  .pip-potato { background: #8B6914; }
+  .score-label { font-size: 9px; color: #a08840; letter-spacing: 2px; text-transform: uppercase; }
+  .score-value { font-size: 24px; font-weight: bold; color: #f0c840; line-height: 1.1; }
+  #ammo-block { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+  .ammo-row { display: flex; gap: 3px; }
+  .ammo-pip { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid rgba(180,140,60,0.4); }
+  .pip-potato { background: #c8841a; }
   .pip-tomato { background: #c0392b; }
-  .pip-used { background: transparent; border-color: rgba(210,150,80,0.2); }
-  #overlay {
-    position: fixed; inset: 0;
-    background: rgba(10,5,0,0.92);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    z-index: 100; padding: 24px;
-  }
-  #overlay h1 { font-size: 42px; color: #f0c060; text-shadow: 0 2px 12px rgba(240,100,0,0.5); letter-spacing: -1px; margin-bottom: 4px; }
-  #overlay .subtitle { color: #a07840; font-size: 14px; letter-spacing: 2px; margin-bottom: 32px; }
-  .btn {
-    background: #8B3A10; color: #f0c060; border: 1.5px solid #c05020;
-    border-radius: 8px; font-family: 'Georgia', serif; font-size: 18px;
-    padding: 14px 40px; cursor: pointer; letter-spacing: 1px;
-    margin: 6px 0; width: 240px; transition: background 0.15s;
-  }
-  .btn:active { background: #a04010; }
-  .btn-secondary { background: transparent; color: #a07840; border-color: rgba(160,120,64,0.4); font-size: 15px; padding: 10px 40px; }
-  #leaderboard-screen { display: none; width: 100%; max-width: 340px; }
-  #leaderboard-screen h2 { color: #f0c060; font-size: 22px; text-align: center; margin-bottom: 16px; }
-  .lb-row { display: flex; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid rgba(160,120,64,0.15); color: #d4a040; font-size: 15px; }
-  .lb-row:first-child { border-top: 1px solid rgba(160,120,64,0.15); }
-  .lb-rank { color: #806030; width: 28px; }
-  .lb-name { flex: 1; }
-  .lb-pts { color: #f0c060; font-weight: bold; }
-  .lb-empty { text-align: center; color: #806030; padding: 24px; font-size: 14px; }
-  #name-screen { display: none; text-align: center; }
-  #name-screen p { color: #d4a040; font-size: 16px; margin-bottom: 8px; }
-  #name-screen .final-score { font-size: 36px; color: #f0c060; font-weight: bold; margin: 12px 0; }
-  #name-input {
-    background: rgba(20,10,2,0.8); border: 1.5px solid rgba(210,150,80,0.5);
-    border-radius: 8px; color: #f0c060; font-family: 'Georgia', serif;
-    font-size: 18px; padding: 12px 16px; width: 240px; text-align: center; margin: 12px 0; outline: none;
-  }
-  #name-input::placeholder { color: #806030; }
+  .pip-used { background: transparent; border-color: rgba(180,140,60,0.15); }
+
+  /* ── THROW ZONE UI ── */
   #hint {
-    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-    color: rgba(220,180,80,0.85); font-size: 14px; letter-spacing: 1px;
-    pointer-events: none; z-index: 10; transition: opacity 1s;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    position: fixed; bottom: 22px; left: 0; right: 0; text-align: center;
+    color: rgba(220,190,100,0.9); font-size: 13px; letter-spacing: 1.5px;
+    pointer-events: none; z-index: 10; transition: opacity 0.8s;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.8);
   }
   #item-select {
-    position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 16px; z-index: 10;
+    position: fixed; bottom: 58px; left: 0; right: 0;
+    display: flex; justify-content: center; gap: 20px; z-index: 10;
   }
   .item-btn {
-    background: rgba(20,10,2,0.8); border: 2px solid rgba(210,150,80,0.3);
-    border-radius: 50%; width: 52px; height: 52px; font-size: 26px;
+    background: rgba(30,20,5,0.85); border: 2px solid rgba(180,140,60,0.35);
+    border-radius: 50%; width: 56px; height: 56px; font-size: 28px;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
     transition: border-color 0.15s, transform 0.1s;
+    backdrop-filter: blur(4px);
+    -webkit-tap-highlight-color: transparent;
   }
-  .item-btn.active { border-color: #f0c060; transform: scale(1.1); }
-  .item-btn.empty { opacity: 0.3; pointer-events: none; }
+  .item-btn.active { border-color: #f0c840; transform: scale(1.12); }
+  .item-btn.empty { opacity: 0.28; pointer-events: none; }
+
+  /* ── OVERLAY ── */
+  #overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,10,3,0.93);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 24px 20px;
+    padding-top: max(env(safe-area-inset-top), 24px);
+    padding-bottom: max(env(safe-area-inset-bottom), 24px);
+  }
+
+  /* Card container — centers everything nicely on all screen sizes */
+  .overlay-card {
+    background: rgba(30,22,8,0.96);
+    border: 1.5px solid rgba(160,120,50,0.45);
+    border-radius: 18px;
+    padding: 32px 28px 28px;
+    width: 100%; max-width: 360px;
+    display: flex; flex-direction: column; align-items: center;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+
+  #overlay h1 {
+    font-size: clamp(32px, 10vw, 46px);
+    color: #f0c840;
+    text-shadow: 0 2px 14px rgba(240,150,0,0.5);
+    letter-spacing: -0.5px; margin-bottom: 2px;
+    text-align: center;
+  }
+  #overlay .subtitle {
+    color: #a08840; font-size: 12px; letter-spacing: 3px;
+    margin-bottom: 28px; text-align: center;
+  }
+
+  .btn {
+    background: linear-gradient(180deg, #a04818 0%, #7a3210 100%);
+    color: #f8e080; border: 1.5px solid #c06030;
+    border-radius: 10px; font-family: 'Georgia', serif;
+    font-size: clamp(15px, 4.5vw, 18px);
+    padding: 15px 0; cursor: pointer; letter-spacing: 1px;
+    margin: 5px 0; width: 100%; max-width: 280px;
+    transition: filter 0.12s; -webkit-tap-highlight-color: transparent;
+    text-align: center;
+  }
+  .btn:active { filter: brightness(1.2); }
+  .btn-secondary {
+    background: transparent; color: #a08840;
+    border-color: rgba(160,120,50,0.35); font-size: clamp(13px, 4vw, 15px);
+    padding: 11px 0;
+  }
+
+  /* Leaderboard */
+  #leaderboard-screen { display: none; width: 100%; }
+  #leaderboard-screen h2 { color: #f0c840; font-size: 20px; text-align: center; margin-bottom: 14px; }
+  .lb-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 9px 10px; border-bottom: 1px solid rgba(160,120,50,0.15);
+    color: #c8a050; font-size: 14px;
+  }
+  .lb-row:first-child { border-top: 1px solid rgba(160,120,50,0.15); }
+  .lb-rank { width: 28px; font-size: 16px; }
+  .lb-name { flex: 1; padding: 0 6px; }
+  .lb-pts { color: #f0c840; font-weight: bold; }
+  .lb-empty { text-align: center; color: #806830; padding: 24px; font-size: 13px; }
+
+  /* Name entry */
+  #name-screen { display: none; text-align: center; width: 100%; }
+  #name-screen p { color: #c8a050; font-size: 15px; margin-bottom: 4px; }
+  #name-screen .final-score { font-size: clamp(28px, 9vw, 38px); color: #f0c840; font-weight: bold; margin: 10px 0 4px; }
+  #name-input {
+    background: rgba(15,10,3,0.8); border: 1.5px solid rgba(180,140,60,0.5);
+    border-radius: 10px; color: #f0c840; font-family: 'Georgia', serif;
+    font-size: 18px; padding: 13px 16px; width: 100%; max-width: 280px;
+    text-align: center; margin: 12px 0 8px; outline: none;
+    -webkit-appearance: none;
+  }
+  #name-input::placeholder { color: #706030; }
 </style>
 </head>
 <body>
@@ -109,6 +158,7 @@
   <div class="item-btn" id="btn-tomato" onclick="selectItem('tomato')">🍅</div>
 </div>
 <div id="overlay">
+  <div class="overlay-card">
   <div id="main-screen">
     <h1>🥔 Potato Fan</h1>
     <div class="subtitle">KITCHEN CARNAGE</div>
@@ -118,15 +168,16 @@
   <div id="leaderboard-screen">
     <h2>🏆 Leaderboard</h2>
     <div id="lb-list"></div>
-    <button class="btn btn-secondary" style="margin-top:20px;width:240px;" onclick="showMain()">← BACK</button>
+    <button class="btn btn-secondary" style="margin-top:16px;" onclick="showMain()">← BACK</button>
   </div>
   <div id="name-screen">
     <p>Round over!</p>
     <div class="final-score" id="final-score-display">0 pts</div>
-    <p style="color:#a07840;font-size:13px;">Enter your name</p>
-    <input id="name-input" type="text" placeholder="Your name" maxlength="16" />
+    <p style="color:#806830;font-size:12px;margin-top:4px;">Enter your name</p>
+    <input id="name-input" type="text" placeholder="Your name" maxlength="16" autocomplete="off" />
     <button class="btn" onclick="saveScore()">SAVE SCORE</button>
     <button class="btn btn-secondary" onclick="skipSave()">SKIP</button>
+  </div>
   </div>
 </div>
 
@@ -491,337 +542,321 @@ function quad(x1,y1,x2,y2,x3,y3,x4,y4, fillStyle) {
 
 function drawKitchen() {
   const vx = vpX(), vy = vpY();
-  const horizon = H * 0.67; // where wall meets floor in perspective
+  const horizon = H * 0.67;
 
-  // ── CEILING ──────────────────────────────────────────────────────
-  const ceilGrad = ctx.createLinearGradient(0, 0, 0, horizon * 0.35);
-  ceilGrad.addColorStop(0, '#d4c4a8');
-  ceilGrad.addColorStop(1, '#bfaa88');
-  ctx.fillStyle = ceilGrad;
-  ctx.fillRect(0, 0, W, horizon * 0.35);
-
-  // ── BACK WALL ────────────────────────────────────────────────────
-  const wallGrad = ctx.createLinearGradient(0, horizon * 0.3, 0, horizon);
-  wallGrad.addColorStop(0,   '#d6bc8c');
-  wallGrad.addColorStop(0.5, '#c8a870');
-  wallGrad.addColorStop(1,   '#b8955a');
-  ctx.fillStyle = wallGrad;
-  ctx.fillRect(0, horizon * 0.3, W, horizon * 0.72);
-
-  // Subtle wall panels / texture
-  ctx.strokeStyle = 'rgba(0,0,0,0.04)';
-  ctx.lineWidth = 1;
-  for (let y = horizon * 0.35; y < horizon; y += H * 0.06) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  // ── CEILING — off-white popcorn texture ──────────────────────────
+  const ceilG = ctx.createLinearGradient(0, 0, 0, horizon * 0.32);
+  ceilG.addColorStop(0, '#e8e0d0');
+  ceilG.addColorStop(1, '#d8d0bc');
+  ctx.fillStyle = ceilG;
+  ctx.fillRect(0, 0, W, horizon * 0.32);
+  // Subtle stipple texture
+  ctx.fillStyle = 'rgba(0,0,0,0.03)';
+  for (let i = 0; i < 80; i++) {
+    ctx.fillRect(Math.sin(i*137.5)*W*0.5+W*0.5, Math.cos(i*97.3)*horizon*0.16+horizon*0.16, 2, 1);
   }
 
-  // Ambient occlusion along wall/floor join
-  const aoGrad = ctx.createLinearGradient(0, horizon - 18, 0, horizon + 10);
-  aoGrad.addColorStop(0, 'rgba(0,0,0,0)');
-  aoGrad.addColorStop(1, 'rgba(0,0,0,0.22)');
-  ctx.fillStyle = aoGrad;
-  ctx.fillRect(0, horizon - 18, W, 28);
+  // ── BACK WALL — warm cream/beige 90s wall ────────────────────────
+  const wallG = ctx.createLinearGradient(0, horizon*0.28, 0, horizon);
+  wallG.addColorStop(0,   '#e8dcc8');
+  wallG.addColorStop(0.6, '#ddd0b8');
+  wallG.addColorStop(1,   '#ccc0a0');
+  ctx.fillStyle = wallG;
+  ctx.fillRect(0, horizon * 0.28, W, horizon * 0.74);
 
-  // ── PERSPECTIVE FLOOR ─────────────────────────────────────────────
-  // Base floor colour — gradient from horizon (lighter) to bottom (darker)
-  const floorGrad = ctx.createLinearGradient(0, horizon, 0, H);
-  floorGrad.addColorStop(0,   '#8a6b3a');
-  floorGrad.addColorStop(0.4, '#6e5228');
-  floorGrad.addColorStop(1,   '#4a3518');
-  ctx.fillStyle = floorGrad;
-  ctx.fillRect(0, horizon, W, H - horizon);
-
-  // Floor tile grid converging to vanishing point
+  // ── FLORAL WALLPAPER BORDER (classic 90s!) ───────────────────────
+  const borderY = horizon * 0.34;
+  const borderH = H * 0.055;
+  // Border background — dusty mauve/rose
+  ctx.fillStyle = '#c8a898';
+  ctx.fillRect(0, borderY, W, borderH);
+  // Repeating floral pattern
   ctx.save();
-  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-  ctx.lineWidth = 1;
-
-  // Horizontal lines (parallel, evenly spaced in perspective)
-  const steps = 9;
-  for (let i = 1; i <= steps; i++) {
-    const t = Math.pow(i / steps, 1.7); // power curve = perspective compression
-    const y = horizon + (H - horizon) * t;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  const flowerSpacing = W * 0.09;
+  for (let fx = flowerSpacing * 0.5; fx < W; fx += flowerSpacing) {
+    const fy = borderY + borderH * 0.5;
+    // Stem
+    ctx.strokeStyle = '#5a7a3a'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(fx, fy+borderH*0.3); ctx.lineTo(fx, fy-borderH*0.1); ctx.stroke();
+    // Leaves
+    ctx.fillStyle = '#6a8a44';
+    ctx.beginPath(); ctx.ellipse(fx-6, fy+borderH*0.1, 5, 2.5, -0.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(fx+6, fy, 5, 2.5, 0.5, 0, Math.PI*2); ctx.fill();
+    // Petals
+    const petalColors = ['#e07880','#d06070','#c85870'];
+    for (let p = 0; p < 5; p++) {
+      const pa = (p/5)*Math.PI*2;
+      ctx.fillStyle = petalColors[p%3];
+      ctx.beginPath(); ctx.ellipse(fx+Math.cos(pa)*5, fy-borderH*0.15+Math.sin(pa)*5, 4, 2.5, pa, 0, Math.PI*2); ctx.fill();
+    }
+    // Center
+    ctx.fillStyle = '#f0d060';
+    ctx.beginPath(); ctx.arc(fx, fy-borderH*0.15, 3, 0, Math.PI*2); ctx.fill();
+    // Small accent between flowers
+    ctx.fillStyle = '#8a5a6a';
+    ctx.beginPath(); ctx.arc(fx + flowerSpacing*0.5, fy, 2, 0, Math.PI*2); ctx.fill();
   }
-
-  // Vertical lines converging to VP
-  const cols = 12;
-  for (let i = 0; i <= cols; i++) {
-    const bx = (i / cols) * W; // position at bottom of screen
-    ctx.beginPath(); ctx.moveTo(vx, horizon); ctx.lineTo(bx, H); ctx.stroke();
-  }
+  // Border trim lines
+  ctx.strokeStyle = '#a07868'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0,borderY); ctx.lineTo(W,borderY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,borderY+borderH); ctx.lineTo(W,borderY+borderH); ctx.stroke();
   ctx.restore();
-
-  // Floor shine strip near horizon
-  const shineGrad = ctx.createLinearGradient(0, horizon, 0, horizon + H*0.06);
-  shineGrad.addColorStop(0,   'rgba(255,240,200,0.12)');
-  shineGrad.addColorStop(1,   'rgba(255,240,200,0)');
-  ctx.fillStyle = shineGrad;
-  ctx.fillRect(0, horizon, W, H*0.06);
 
   // ── WINDOW ───────────────────────────────────────────────────────
   const wx = W*0.52, wy = H*0.10, ww = W*0.30, wh = H*0.36;
   WIN.x = wx; WIN.y = wy; WIN.w = ww; WIN.h = wh;
 
-  // Window recess (3D sill)
-  const sillDepth = 8;
-  ctx.fillStyle = '#a08048';
-  ctx.fillRect(wx - sillDepth, wy - sillDepth, ww + sillDepth*2, wh + sillDepth*2);
-  ctx.fillStyle = '#b09050';
-  // top face of sill
-  ctx.beginPath(); ctx.moveTo(wx-sillDepth, wy-sillDepth); ctx.lineTo(wx+ww+sillDepth, wy-sillDepth); ctx.lineTo(wx+ww, wy); ctx.lineTo(wx, wy); ctx.closePath(); ctx.fill();
-  // left face
-  ctx.fillStyle = '#907040';
-  ctx.beginPath(); ctx.moveTo(wx-sillDepth, wy-sillDepth); ctx.lineTo(wx, wy); ctx.lineTo(wx, wy+wh); ctx.lineTo(wx-sillDepth, wy+wh+sillDepth); ctx.closePath(); ctx.fill();
+  // Window recess sill
+  ctx.fillStyle = '#c8b898';
+  ctx.fillRect(wx-8, wy-8, ww+16, wh+16);
+  ctx.fillStyle = '#b8a888';
+  ctx.beginPath(); ctx.moveTo(wx-8,wy-8); ctx.lineTo(wx+ww+8,wy-8); ctx.lineTo(wx+ww,wy); ctx.lineTo(wx,wy); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#a89878';
+  ctx.beginPath(); ctx.moveTo(wx-8,wy-8); ctx.lineTo(wx,wy); ctx.lineTo(wx,wy+wh); ctx.lineTo(wx-8,wy+wh+8); ctx.closePath(); ctx.fill();
 
   if (!WIN.broken) {
-    // Sky outside
-    const skyGrad = ctx.createLinearGradient(wx, wy, wx, wy+wh);
-    skyGrad.addColorStop(0, '#6ab0e0');
-    skyGrad.addColorStop(1, '#a8d4f0');
-    ctx.fillStyle = skyGrad;
-    ctx.fillRect(wx, wy, ww, wh);
+    const skyG = ctx.createLinearGradient(wx, wy, wx, wy+wh);
+    skyG.addColorStop(0, '#7abce8'); skyG.addColorStop(1, '#b8ddf0');
+    ctx.fillStyle = skyG; ctx.fillRect(wx, wy, ww, wh);
     // Clouds
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    [[wx+ww*0.15, wy+wh*0.2, 22],[wx+ww*0.55, wy+wh*0.15, 18],[wx+ww*0.7, wy+wh*0.35, 14]].forEach(([cx,cy,r]) => {
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    [[wx+ww*0.2,wy+wh*0.18,18],[wx+ww*0.6,wy+wh*0.12,14],[wx+ww*0.75,wy+wh*0.3,11]].forEach(([cx,cy,r])=>{
       ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx+r*0.7,cy,r*0.7,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx-r*0.6,cy,r*0.65,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+r*.7,cy,r*.65,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx-r*.6,cy,r*.6,0,Math.PI*2); ctx.fill();
     });
-    // Glass reflection
-    const glassGrad = ctx.createLinearGradient(wx, wy, wx+ww, wy+wh);
-    glassGrad.addColorStop(0,   'rgba(255,255,255,0.18)');
-    glassGrad.addColorStop(0.4, 'rgba(255,255,255,0)');
-    glassGrad.addColorStop(1,   'rgba(255,255,255,0.06)');
-    ctx.fillStyle = glassGrad;
-    ctx.fillRect(wx, wy, ww, wh);
-    // Window cross frame
-    ctx.strokeStyle = '#8a6030'; ctx.lineWidth = 5;
-    ctx.strokeRect(wx, wy, ww, wh);
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(wx+ww*0.5, wy); ctx.lineTo(wx+ww*0.5, wy+wh); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(wx, wy+wh*0.48); ctx.lineTo(wx+ww, wy+wh*0.48); ctx.stroke();
+    // Glass sheen
+    const glG = ctx.createLinearGradient(wx,wy,wx+ww,wy+wh);
+    glG.addColorStop(0,'rgba(255,255,255,0.15)'); glG.addColorStop(0.5,'rgba(255,255,255,0)'); glG.addColorStop(1,'rgba(255,255,255,0.05)');
+    ctx.fillStyle = glG; ctx.fillRect(wx,wy,ww,wh);
   } else {
-    ctx.fillStyle = '#120d06';
-    ctx.fillRect(wx, wy, ww, wh);
-    // Static crack lines (stored so they don't flicker each frame)
+    ctx.fillStyle = '#0e0c08'; ctx.fillRect(wx,wy,ww,wh);
     if (!WIN.crackLines) {
       WIN.crackLines = [];
-      const cx2 = wx + ww/2, cy2 = wy + wh/2;
-      for (let i = 0; i < 12; i++) {
-        const a = (i/12)*Math.PI*2 + 0.1;
-        const r1 = ww*0.12, r2 = ww*(0.3+Math.random()*0.3);
-        const jx = Math.cos(a)*r1 + (Math.random()-0.5)*8;
-        const jy = Math.sin(a)*r1 + (Math.random()-0.5)*8;
-        WIN.crackLines.push([cx2, cy2, cx2+jx, cy2+jy, cx2+Math.cos(a)*r2, cy2+Math.sin(a)*r2]);
+      const cx2=wx+ww/2, cy2=wy+wh/2;
+      for (let i=0;i<12;i++) {
+        const a=(i/12)*Math.PI*2+0.1, r1=ww*0.1, r2=ww*(0.28+Math.random()*0.3);
+        WIN.crackLines.push([cx2,cy2, cx2+Math.cos(a)*r1+(Math.random()-.5)*8, cy2+Math.sin(a)*r1+(Math.random()-.5)*8, cx2+Math.cos(a)*r2, cy2+Math.sin(a)*r2]);
       }
     }
-    ctx.strokeStyle = 'rgba(180,220,255,0.55)'; ctx.lineWidth = 1.5;
-    for (const [x1,y1,x2,y2,x3,y3] of WIN.crackLines) {
-      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.lineTo(x3,y3); ctx.stroke();
-    }
-    ctx.strokeStyle = '#8a6030'; ctx.lineWidth = 5;
-    ctx.strokeRect(wx, wy, ww, wh);
+    ctx.strokeStyle='rgba(180,220,255,0.5)'; ctx.lineWidth=1.5;
+    for (const [x1,y1,x2,y2,x3,y3] of WIN.crackLines) { ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.lineTo(x3,y3); ctx.stroke(); }
   }
+  // White painted window frame — very 90s
+  ctx.strokeStyle = '#e8e0d0'; ctx.lineWidth = 7;
+  ctx.strokeRect(wx, wy, ww, wh);
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(wx+ww*0.5,wy); ctx.lineTo(wx+ww*0.5,wy+wh); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(wx,wy+wh*0.48); ctx.lineTo(wx+ww,wy+wh*0.48); ctx.stroke();
 
-  // Curtains with fabric folds
-  function drawCurtain(side) {
-    const dir = side === 'left' ? -1 : 1;
-    const ox = side === 'left' ? wx : wx+ww;
-    const cw = ww * 0.22;
-    const folds = 3;
-    ctx.save();
-    for (let f = 0; f < folds; f++) {
-      const fx = ox + dir * f * (cw/folds);
-      const shade = f % 2 === 0 ? '#8B1515' : '#a02020';
-      ctx.fillStyle = shade;
-      ctx.beginPath();
-      ctx.moveTo(fx, wy - 8);
-      ctx.quadraticCurveTo(fx + dir*(cw/folds)*0.5, wy+wh*0.5, fx, wy+wh+8);
-      ctx.lineTo(fx + dir*(cw/folds), wy+wh+8);
-      ctx.quadraticCurveTo(fx + dir*(cw/folds)*1.5, wy+wh*0.5, fx + dir*(cw/folds), wy-8);
-      ctx.closePath();
-      ctx.fill();
+  // Poufy window valance — very 90s!
+  ctx.fillStyle = '#b05868';
+  for (let v=0; v<3; v++) {
+    const vx2 = wx + (v/3)*ww;
+    const vw = ww/3;
+    ctx.beginPath();
+    ctx.moveTo(vx2, wy-2);
+    ctx.quadraticCurveTo(vx2+vw*0.5, wy+H*0.04, vx2+vw, wy-2);
+    ctx.lineTo(vx2+vw, wy-8); ctx.lineTo(vx2, wy-8);
+    ctx.closePath(); ctx.fill();
+    // Fringe dots
+    ctx.fillStyle = '#d4a0a8';
+    for (let fd=0; fd<5; fd++) {
+      const fvx = vx2 + (fd/4)*vw;
+      const fvy = wy + H*0.012 + Math.sin((fd/4)*Math.PI)*H*0.022;
+      ctx.beginPath(); ctx.arc(fvx, fvy, 3, 0, Math.PI*2); ctx.fill();
     }
-    // Curtain rod
-    ctx.fillStyle = '#c89040';
-    ctx.fillRect(ox - (side==='left'?cw:0), wy-10, cw, 6);
-    ctx.restore();
+    ctx.fillStyle = '#b05868';
   }
-  drawCurtain('left'); drawCurtain('right');
+  // Valance rod
+  ctx.fillStyle = '#c8a050';
+  ctx.fillRect(wx-10, wy-10, ww+20, 8);
 
-  // ── LEFT WALL CABINETS (3D) ───────────────────────────────────────
-  const cabX = 0, cabY = H*0.08, cabW = W*0.28, cabH = H*0.42;
-  const cabDepth = W*0.022;
+  // ── HONEY OAK CABINETS (left wall, 90s style) ────────────────────
+  const cabX=0, cabY=H*0.08, cabW=W*0.28, cabH=H*0.42;
+  const cabDepth=W*0.022;
 
-  // Cabinet body — front face with gradient
-  const cabGrad = ctx.createLinearGradient(cabX, cabY, cabX+cabW, cabY);
-  cabGrad.addColorStop(0,   '#a07040');
-  cabGrad.addColorStop(0.5, '#8a5e30');
-  cabGrad.addColorStop(1,   '#7a5028');
-  ctx.fillStyle = cabGrad;
-  ctx.fillRect(cabX, cabY, cabW, cabH);
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.12)'; ctx.fillRect(cabX+cabW,cabY+4,6,cabH);
 
-  // Cabinet top face (3D lid)
-  ctx.fillStyle = '#c09050';
-  ctx.beginPath();
-  ctx.moveTo(cabX, cabY);
-  ctx.lineTo(cabX+cabW, cabY);
-  ctx.lineTo(cabX+cabW+cabDepth, cabY - cabDepth*0.5);
-  ctx.lineTo(cabX+cabDepth, cabY - cabDepth*0.5);
-  ctx.closePath(); ctx.fill();
+  // Cabinet body — honey oak gradient
+  const oakG = ctx.createLinearGradient(cabX,cabY,cabX+cabW,cabY);
+  oakG.addColorStop(0,   '#d4942a');
+  oakG.addColorStop(0.3, '#e8a838');
+  oakG.addColorStop(0.6, '#c88420');
+  oakG.addColorStop(1,   '#b87018');
+  ctx.fillStyle = oakG; ctx.fillRect(cabX,cabY,cabW,cabH);
 
-  // Cabinet right side face
-  ctx.fillStyle = '#5a3818';
-  ctx.beginPath();
-  ctx.moveTo(cabX+cabW, cabY);
-  ctx.lineTo(cabX+cabW+cabDepth, cabY - cabDepth*0.5);
-  ctx.lineTo(cabX+cabW+cabDepth, cabY+cabH - cabDepth*0.5);
-  ctx.lineTo(cabX+cabW, cabY+cabH);
-  ctx.closePath(); ctx.fill();
+  // Oak grain lines
+  ctx.save();
+  ctx.strokeStyle='rgba(150,80,0,0.12)'; ctx.lineWidth=1;
+  for (let g=0;g<8;g++) {
+    const gx = cabX + (g/7)*cabW;
+    ctx.beginPath(); ctx.moveTo(gx+(Math.sin(g)*3),cabY); ctx.lineTo(gx-(Math.sin(g)*2),cabY+cabH); ctx.stroke();
+  }
+  ctx.restore();
 
-  // Door panels — inset with bevel
-  const panelColor = '#956838';
-  const panels = [
-    [W*0.02, H*0.10, W*0.11, H*0.14],
-    [W*0.15, H*0.10, W*0.11, H*0.14],
-    [W*0.02, H*0.27, W*0.11, H*0.12],
-    [W*0.15, H*0.27, W*0.11, H*0.12],
-    [W*0.02, H*0.41, W*0.11, H*0.07],
-    [W*0.15, H*0.41, W*0.11, H*0.07],
+  // Top 3D face
+  ctx.fillStyle='#f0b840';
+  ctx.beginPath(); ctx.moveTo(cabX,cabY); ctx.lineTo(cabX+cabW,cabY); ctx.lineTo(cabX+cabW+cabDepth,cabY-cabDepth*.5); ctx.lineTo(cabX+cabDepth,cabY-cabDepth*.5); ctx.closePath(); ctx.fill();
+  // Right side face
+  ctx.fillStyle='#9a6010';
+  ctx.beginPath(); ctx.moveTo(cabX+cabW,cabY); ctx.lineTo(cabX+cabW+cabDepth,cabY-cabDepth*.5); ctx.lineTo(cabX+cabW+cabDepth,cabY+cabH-cabDepth*.5); ctx.lineTo(cabX+cabW,cabY+cabH); ctx.closePath(); ctx.fill();
+
+  // Door panels — beveled oak style
+  const panels=[
+    [W*0.02,H*0.10,W*0.11,H*0.14],[W*0.15,H*0.10,W*0.11,H*0.14],
+    [W*0.02,H*0.27,W*0.11,H*0.12],[W*0.15,H*0.27,W*0.11,H*0.12],
+    [W*0.02,H*0.41,W*0.11,H*0.07],[W*0.15,H*0.41,W*0.11,H*0.07],
   ];
   for (const [px,py,pw,ph2] of panels) {
-    // Panel recess shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
-    ctx.fillRect(px+2, py+2, pw, ph2);
-    ctx.fillStyle = panelColor;
-    ctx.fillRect(px, py, pw, ph2);
-    // Highlight top/left edges
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.fillRect(px, py, pw, 2);
-    ctx.fillRect(px, py, 2, ph2);
-    // Shadow bottom/right edges
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.fillRect(px, py+ph2-2, pw, 2);
-    ctx.fillRect(px+pw-2, py, 2, ph2);
+    // Inset shadow
+    ctx.fillStyle='rgba(0,0,0,0.15)'; ctx.fillRect(px+2,py+2,pw,ph2);
+    // Panel fill
+    const panG=ctx.createLinearGradient(px,py,px+pw,py);
+    panG.addColorStop(0,'#cc8818'); panG.addColorStop(0.5,'#e09a28'); panG.addColorStop(1,'#b87018');
+    ctx.fillStyle=panG; ctx.fillRect(px,py,pw,ph2);
+    // Bevel — light top/left
+    ctx.fillStyle='rgba(255,200,80,0.25)'; ctx.fillRect(px,py,pw,3); ctx.fillRect(px,py,3,ph2);
+    // Bevel — dark bottom/right
+    ctx.fillStyle='rgba(80,40,0,0.2)'; ctx.fillRect(px,py+ph2-3,pw,3); ctx.fillRect(px+pw-3,py,3,ph2);
   }
-  // Handles — brass knobs
+  // White ceramic knobs — very 90s!
   for (const [xi,yi] of [[W*0.075,H*0.165],[W*0.205,H*0.165],[W*0.075,H*0.33],[W*0.205,H*0.33],[W*0.075,H*0.445],[W*0.205,H*0.445]]) {
-    const hg = ctx.createRadialGradient(xi-2,yi-2,1, xi,yi,6);
-    hg.addColorStop(0,'#f0d060'); hg.addColorStop(1,'#a07020');
-    ctx.fillStyle = hg;
-    ctx.beginPath(); ctx.arc(xi, yi, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.arc(xi+2,yi+2,6,0,Math.PI*2); ctx.fill();
+    const kg=ctx.createRadialGradient(xi-2,yi-2,1,xi,yi,7);
+    kg.addColorStop(0,'#ffffff'); kg.addColorStop(0.6,'#e8e8e8'); kg.addColorStop(1,'#c0c0c0');
+    ctx.fillStyle=kg; ctx.beginPath(); ctx.arc(xi,yi,6,0,Math.PI*2); ctx.fill();
   }
 
-  // Cabinet bottom edge highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.07)';
-  ctx.fillRect(cabX, cabY+cabH-2, cabW, 2);
-
-  // ── COUNTERTOPS (3D) ─────────────────────────────────────────────
-  // Left counter
+  // ── GRANITE COUNTERTOPS (speckled, very 90s) ─────────────────────
   const ctY = horizon - H*0.06;
   const ctH = H*0.055;
-  const ctDepth = H*0.03;
+  const ctDepth = H*0.032;
 
-  // Left counter body — front face
-  const ctGrad = ctx.createLinearGradient(0, ctY, 0, ctY+ctH);
-  ctGrad.addColorStop(0, '#8a6a3a');
-  ctGrad.addColorStop(1, '#6a4c22');
-  ctx.fillStyle = ctGrad;
-  ctx.fillRect(0, ctY, W*0.5, ctH);
-
-  // Left counter top face (lighter, slightly slanted for 3D)
-  const topGrad = ctx.createLinearGradient(0, ctY-ctDepth, 0, ctY);
-  topGrad.addColorStop(0, '#c8a060');
-  topGrad.addColorStop(1, '#a07840');
-  ctx.fillStyle = topGrad;
-  ctx.beginPath();
-  ctx.moveTo(0, ctY);
-  ctx.lineTo(W*0.5, ctY);
-  ctx.lineTo(W*0.5 + ctDepth*0.5, ctY - ctDepth);
-  ctx.lineTo(ctDepth*0.5, ctY - ctDepth);
-  ctx.closePath(); ctx.fill();
-  // Counter top edge highlight
-  ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, ctY); ctx.lineTo(W*0.5, ctY); ctx.stroke();
-
-  // Left counter under-cabinet shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
-  ctx.fillRect(0, ctY+ctH, W*0.5, 5);
-
-  // Right counter
-  const rc = W*0.56;
-  ctx.fillStyle = ctGrad;
-  ctx.fillRect(rc, ctY, W - rc, ctH);
-  ctx.fillStyle = topGrad;
-  ctx.beginPath();
-  ctx.moveTo(rc, ctY); ctx.lineTo(W, ctY);
-  ctx.lineTo(W, ctY - ctDepth); ctx.lineTo(rc + ctDepth*0.5, ctY - ctDepth);
-  ctx.closePath(); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(rc, ctY); ctx.lineTo(W, ctY); ctx.stroke();
-
-  // ── UPPER SHELF (right wall, 3D) ──────────────────────────────────
-  const shX = W*0.68, shY = H*0.44, shW = W*0.32, shD = H*0.018;
-  // Shelf top face
-  const shGrad = ctx.createLinearGradient(shX, shY-shD, shX, shY);
-  shGrad.addColorStop(0, '#b08840');
-  shGrad.addColorStop(1, '#8a6528');
-  ctx.fillStyle = shGrad;
-  ctx.beginPath();
-  ctx.moveTo(shX, shY); ctx.lineTo(shX+shW, shY);
-  ctx.lineTo(shX+shW, shY-shD); ctx.lineTo(shX, shY-shD);
-  ctx.closePath(); ctx.fill();
-  // Shelf front face
-  ctx.fillStyle = '#6a4c1a';
-  ctx.fillRect(shX, shY, shW, H*0.018);
-  // Shelf shadow below
-  const shShadow = ctx.createLinearGradient(shX, shY+H*0.018, shX, shY+H*0.045);
-  shShadow.addColorStop(0, 'rgba(0,0,0,0.2)');
-  shShadow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = shShadow;
-  ctx.fillRect(shX, shY+H*0.018, shW, H*0.027);
-
-  // Shelf brackets
-  for (const bx of [shX, shX+shW]) {
-    ctx.fillStyle = '#5a3c10';
+  function drawGraniteCounter(x, w2) {
+    // Top face — granite speckle
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(bx, shY+H*0.018);
-    ctx.lineTo(bx + (bx===shX?1:-1)*W*0.012, shY+H*0.07);
-    ctx.lineTo(bx + (bx===shX?1:-1)*W*0.012, shY+H*0.075);
-    ctx.lineTo(bx, shY+H*0.022);
-    ctx.closePath(); ctx.fill();
+    ctx.moveTo(x,ctY); ctx.lineTo(x+w2,ctY); ctx.lineTo(x+w2+ctDepth*.5,ctY-ctDepth); ctx.lineTo(x+ctDepth*.5,ctY-ctDepth);
+    ctx.closePath(); ctx.clip();
+    // Granite base — dark grey-beige
+    ctx.fillStyle='#b8b0a0'; ctx.fillRect(x,ctY-ctDepth,w2+ctDepth,ctDepth+2);
+    // Speckle
+    for (let s=0;s<60;s++) {
+      const sx=x+Math.random()*w2, sy=ctY-ctDepth+Math.random()*ctDepth;
+      ctx.fillStyle=`rgba(${40+Math.random()*60},${30+Math.random()*40},${20+Math.random()*30},0.5)`;
+      ctx.fillRect(sx,sy,1+Math.random()*3,1);
+    }
+    ctx.restore();
+    // Front face
+    const ctG=ctx.createLinearGradient(x,ctY,x,ctY+ctH);
+    ctG.addColorStop(0,'#a0988a'); ctG.addColorStop(1,'#807870');
+    ctx.fillStyle=ctG; ctx.fillRect(x,ctY,w2,ctH);
+    // Front face speckle
+    ctx.save(); ctx.beginPath(); ctx.rect(x,ctY,w2,ctH); ctx.clip();
+    for (let s=0;s<30;s++) {
+      ctx.fillStyle=`rgba(40,30,20,0.15)`;
+      ctx.fillRect(x+Math.random()*w2, ctY+Math.random()*ctH, 2, 1);
+    }
+    ctx.restore();
+    // Top edge highlight
+    ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x,ctY); ctx.lineTo(x+w2,ctY); ctx.stroke();
   }
 
-  // ── WALL TRIM / BASEBOARD ─────────────────────────────────────────
-  // Ceiling cornice
-  const corniceGrad = ctx.createLinearGradient(0, 0, 0, H*0.04);
-  corniceGrad.addColorStop(0, '#e8d8b8');
-  corniceGrad.addColorStop(1, '#c8b888');
-  ctx.fillStyle = corniceGrad;
-  ctx.fillRect(0, 0, W, H*0.05);
-  ctx.fillStyle = 'rgba(0,0,0,0.08)';
-  ctx.fillRect(0, H*0.038, W, 4);
+  drawGraniteCounter(0, W*0.5);
+  drawGraniteCounter(W*0.56, W*0.44);
 
-  // Baseboard at floor/wall join
-  ctx.fillStyle = '#c8b080';
-  ctx.fillRect(0, horizon - H*0.018, W, H*0.018);
-  ctx.fillStyle = 'rgba(0,0,0,0.15)';
-  ctx.fillRect(0, horizon - H*0.018, W, 2);
+  // ── UPPER SHELF — oak ────────────────────────────────────────────
+  const shX=W*0.68, shY=H*0.44, shW=W*0.32, shD=H*0.018;
+  const shOakG=ctx.createLinearGradient(shX,shY-shD,shX,shY);
+  shOakG.addColorStop(0,'#e8a838'); shOakG.addColorStop(1,'#c88420');
+  ctx.fillStyle=shOakG;
+  ctx.beginPath(); ctx.moveTo(shX,shY); ctx.lineTo(shX+shW,shY); ctx.lineTo(shX+shW,shY-shD); ctx.lineTo(shX,shY-shD); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#9a6010'; ctx.fillRect(shX,shY,shW,H*0.018);
+  const shSh=ctx.createLinearGradient(shX,shY+H*0.018,shX,shY+H*0.042);
+  shSh.addColorStop(0,'rgba(0,0,0,0.18)'); shSh.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=shSh; ctx.fillRect(shX,shY+H*0.018,shW,H*0.026);
 
-  // ── WINDOW LIGHT CAST ON FLOOR ────────────────────────────────────
+  // ── HUNTER GREEN ACCENT TILES (backsplash) ───────────────────────
+  // Between counter and cabinets — classic 90s green tile backsplash
+  const bsY = cabY + cabH;
+  const bsH = ctY - bsY;
+  if (bsH > 0) {
+    const tileW = W*0.045, tileH = H*0.038;
+    for (let ty=bsY; ty<bsY+bsH; ty+=tileH) {
+      for (let tx=0; tx<cabW; tx+=tileW) {
+        const tileG=ctx.createLinearGradient(tx,ty,tx+tileW,ty+tileH);
+        tileG.addColorStop(0,'#3a6a3a'); tileG.addColorStop(0.5,'#4a8a4a'); tileG.addColorStop(1,'#2a5a2a');
+        ctx.fillStyle=tileG; ctx.fillRect(tx+1,ty+1,tileW-2,tileH-2);
+        ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=0.5;
+        ctx.strokeRect(tx,ty,tileW,tileH);
+      }
+    }
+  }
+
+  // ── CHECKERED BLACK & WHITE FLOOR ────────────────────────────────
+  const floorY = horizon;
+  const tileSize = W * 0.12;
+  const cols2 = Math.ceil(W / tileSize) + 2;
+
+  // Base floor colour
+  ctx.fillStyle='#d8d4c8'; ctx.fillRect(0,floorY,W,H-floorY);
+
+  // Perspective checkered tiles converging to VP
+  ctx.save();
+  const steps2 = 10;
+  for (let row=0; row<steps2; row++) {
+    const t0 = Math.pow(row/steps2, 1.6);
+    const t1 = Math.pow((row+1)/steps2, 1.6);
+    const y0 = floorY + (H-floorY)*t0;
+    const y1 = floorY + (H-floorY)*t1;
+    const rowWidth0 = W * (0.3 + t0*0.7);
+    const rowWidth1 = W * (0.3 + t1*0.7);
+    const numTiles = Math.max(2, Math.floor(4 + row*1.2));
+    for (let col=0; col<numTiles; col++) {
+      const x0 = W/2 - rowWidth0/2 + (col/numTiles)*rowWidth0;
+      const x1 = W/2 - rowWidth0/2 + ((col+1)/numTiles)*rowWidth0;
+      const x2 = W/2 - rowWidth1/2 + ((col+1)/numTiles)*rowWidth1;
+      const x3 = W/2 - rowWidth1/2 + (col/numTiles)*rowWidth1;
+      const isBlack = (row + col) % 2 === 0;
+      ctx.fillStyle = isBlack ? '#2a2a2a' : '#e8e4d8';
+      ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y0); ctx.lineTo(x2,y1); ctx.lineTo(x3,y1); ctx.closePath(); ctx.fill();
+    }
+  }
+  // Floor sheen
+  const fSheen=ctx.createLinearGradient(0,floorY,0,floorY+H*0.08);
+  fSheen.addColorStop(0,'rgba(255,250,240,0.15)'); fSheen.addColorStop(1,'rgba(255,250,240,0)');
+  ctx.fillStyle=fSheen; ctx.fillRect(0,floorY,W,H*0.08);
+  ctx.restore();
+
+  // ── CROWN MOLDING / CORNICE ───────────────────────────────────────
+  const cornG=ctx.createLinearGradient(0,0,0,H*0.05);
+  cornG.addColorStop(0,'#e8e0d0'); cornG.addColorStop(1,'#d0c8b8');
+  ctx.fillStyle=cornG; ctx.fillRect(0,0,W,H*0.05);
+  ctx.fillStyle='rgba(0,0,0,0.08)'; ctx.fillRect(0,H*0.048,W,4);
+
+  // ── BASEBOARD ────────────────────────────────────────────────────
+  ctx.fillStyle='#e0d8c8'; ctx.fillRect(0,horizon-H*0.018,W,H*0.018);
+  ctx.fillStyle='rgba(0,0,0,0.1)'; ctx.fillRect(0,horizon-H*0.018,W,2);
+
+  // ── WINDOW LIGHT ON FLOOR ─────────────────────────────────────────
   if (!WIN.broken) {
     ctx.save();
-    const lx = WIN.x + WIN.w*0.5;
-    const lightGrad = ctx.createRadialGradient(lx, horizon, 10, lx, H*0.8, W*0.45);
-    lightGrad.addColorStop(0,   'rgba(255,240,190,0.18)');
-    lightGrad.addColorStop(0.5, 'rgba(255,220,160,0.07)');
-    lightGrad.addColorStop(1,   'rgba(255,220,160,0)');
-    ctx.fillStyle = lightGrad;
-    ctx.fillRect(0, horizon, W, H - horizon);
+    const lx=WIN.x+WIN.w*0.5;
+    const lG=ctx.createRadialGradient(lx,horizon,5,lx,H*0.85,W*0.5);
+    lG.addColorStop(0,'rgba(255,245,210,0.2)'); lG.addColorStop(0.5,'rgba(255,240,200,0.08)'); lG.addColorStop(1,'rgba(255,240,200,0)');
+    ctx.fillStyle=lG; ctx.fillRect(0,horizon,W,H-horizon);
     ctx.restore();
   }
+
+  // ── AMBIENT OCCLUSION at wall/floor join ─────────────────────────
+  const aoG=ctx.createLinearGradient(0,horizon-10,0,horizon+12);
+  aoG.addColorStop(0,'rgba(0,0,0,0)'); aoG.addColorStop(1,'rgba(0,0,0,0.2)');
+  ctx.fillStyle=aoG; ctx.fillRect(0,horizon-10,W,22);
 }
+
 
 function drawItem(item) {
   const ph = item.phys;
@@ -1324,6 +1359,14 @@ function updateProjectile(p) {
     p.vx *= -0.8; p.vy = -Math.abs(p.vy)*0.7;
     playFanHit();
     spawnHit(p.x, p.y, p.type==='tomato');
+    p.hitFan = true; // now it can hit things
+  }
+
+  // Only interact with kitchen after hitting the fan
+  if (!p.hitFan) {
+    // Still remove if it goes completely off screen without hitting fan
+    if (p.y < -100 || p.x < -300 || p.x > W+300 || p.y > H) return true;
+    return false;
   }
 
   // Window hit
@@ -1337,7 +1380,7 @@ function updateProjectile(p) {
     score += pts;
     updateScoreDisplay();
     spawnFloatingText('+'+pts+' 💥 WINDOW!', p.x, p.y - 20, '#88ddff', 24);
-    p.vx *= 0.3; p.vy *= 0.3; // slow down after breaking glass
+    p.vx *= 0.3; p.vy *= 0.3;
   }
 
   // Kitchen item hits
@@ -1352,17 +1395,11 @@ function updateProjectile(p) {
       spawnFloatingText('+'+pts+(p.type==='tomato'?' 🍅':''), p.x, p.y, p.type==='tomato'?'#e74c3c':'#f0c060');
       spawnHit(p.x, p.y, p.type==='tomato');
       addKitchenDamage(p.x, p.y, p.type==='tomato');
-
-      // Play sound
       if (p.type === 'tomato') { playTomatoSplat(p.x); }
       else if (item.sound === 'metal') playMetalBang(p.x);
       else if (item.sound === 'crash') playCrash(p.x);
       else playThud(p.x);
-
-      // Knock item with physics
       knockItem(item, p.vx, p.vy);
-
-      // Bounce projectile off
       if (p.x < ix || p.x > ix+iw) p.vx *= -0.5;
       else p.vy *= -0.5;
     }
@@ -1414,9 +1451,16 @@ canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   if (!gameActive) return;
   const t = e.touches[0];
-  touchStart = { x: t.clientX, y: t.clientY };
-  // Unlock AudioContext on first touch
+  touchStart = { x: t.clientX, y: t.clientY, cx: t.clientX, cy: t.clientY };
   try { getAudio().resume(); } catch(e) {}
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!gameActive || !touchStart) return;
+  const t = e.touches[0];
+  touchStart.cx = t.clientX;
+  touchStart.cy = t.clientY;
 }, { passive: false });
 
 canvas.addEventListener('touchend', e => {
@@ -1432,8 +1476,13 @@ canvas.addEventListener('touchend', e => {
 
 canvas.addEventListener('mousedown', e => {
   if (!gameActive) return;
-  touchStart = { x: e.clientX, y: e.clientY };
+  touchStart = { x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY };
   try { getAudio().resume(); } catch(e) {}
+});
+canvas.addEventListener('mousemove', e => {
+  if (!gameActive || !touchStart) return;
+  touchStart.cx = e.clientX;
+  touchStart.cy = e.clientY;
 });
 canvas.addEventListener('mouseup', e => {
   if (!gameActive || !touchStart) return;
@@ -1443,6 +1492,56 @@ canvas.addEventListener('mouseup', e => {
   touchStart = null;
 });
 
+function drawThrowPreview() {
+  if (!touchStart || !gameActive) return;
+  const sx = touchStart.x, sy = touchStart.y;
+  const dx = touchStart.cx - sx, dy = touchStart.cy - sy;
+  const dist = Math.sqrt(dx*dx+dy*dy);
+  const isTomato = selectedItem === 'tomato';
+  const r = isTomato ? 18 : 14;
+
+  // Draw the item at touch-down point — glowing so it's visible
+  ctx.save();
+  // Glow ring
+  ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.008) * 0.2;
+  ctx.strokeStyle = isTomato ? '#ff6060' : '#f0c840';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(sx, sy, r + 8, 0, Math.PI*2); ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // The item itself
+  if (isTomato) {
+    ctx.fillStyle = '#c0392b';
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath(); ctx.arc(sx - r*0.25, sy - r*0.25, r*0.35, 0, Math.PI*2); ctx.fill();
+    ctx.font = `${r*1.2}px serif`; ctx.textAlign = 'center';
+    ctx.fillText('🍅', sx, sy + r*0.4);
+  } else {
+    ctx.fillStyle = '#8B6914';
+    ctx.beginPath(); ctx.ellipse(sx, sy, r*1.3, r, 0.3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#7a5510'; ctx.fillRect(sx-3, sy-2, 6, 4);
+  }
+
+  // Arc preview dots if swiping upward
+  if (dist > 15 && dy < 0) {
+    const len = Math.sqrt(dx*dx+dy*dy);
+    const speed = Math.min(len * 0.18, 22);
+    const vx = (dx/len)*speed, vy = (dy/len)*speed;
+    ctx.fillStyle = isTomato ? 'rgba(220,80,80,0.5)' : 'rgba(200,160,60,0.5)';
+    let px = sx, py = sy, pvx = vx, pvy = vy;
+    for (let i = 0; i < 18; i++) {
+      pvx *= 0.995; pvy += 0.25;
+      px += pvx; py += pvy;
+      if (py > H * 0.78) break;
+      const dotR = Math.max(1.5, (r * 0.35) * (1 - i/18));
+      ctx.globalAlpha = 0.6 * (1 - i/18);
+      ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 function throwItem(sx, sy, dx, dy) {
   if (selectedItem==='potato' && potatoes<=0) return;
   if (selectedItem==='tomato' && tomatoes<=0) return;
@@ -1450,7 +1549,14 @@ function throwItem(sx, sy, dx, dy) {
   const speed = Math.min(len * 0.18, 22);
   const vx = (dx/len)*speed, vy = (dy/len)*speed;
   const isTomato = selectedItem==='tomato';
-  projectiles.push({ x:sx, y:sy, vx, vy, angle: Math.atan2(vy,vx), spin:(Math.random()-0.5)*0.2, r: isTomato?18:14, type: selectedItem });
+  projectiles.push({
+    x:sx, y:sy, vx, vy,
+    angle: Math.atan2(vy,vx),
+    spin:(Math.random()-0.5)*0.2,
+    r: isTomato?18:14,
+    type: selectedItem,
+    hitFan: false   // must hit fan before interacting with anything else
+  });
   if (isTomato) tomatoes--; else potatoes--;
   updateAmmoDisplay();
   document.getElementById('hint').style.opacity = '0';
@@ -1496,6 +1602,7 @@ function loop(ts) {
   for (let p of projectiles) drawProjectile(p);
   drawFloatingTexts();
   drawForeground();
+  drawThrowPreview();
 
   fanAngle += fanSpeed;
   fanSpeed = Math.max(0.025, fanSpeed * 0.998);
