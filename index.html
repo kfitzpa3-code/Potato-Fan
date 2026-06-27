@@ -298,7 +298,7 @@ drawDial();
 const POTATO_CALLS = [
   'Poh-tay-toe!',
   'Yoose guys!',
-  'Kom-boo-cha!',    // spelled phonetically so TTS says it right
+  'Kom-boo-cha!',
   'Whole Hog!',
   'Flap Back!',
   'Dental Plan!',
@@ -310,89 +310,78 @@ const POTATO_CALLS = [
   'Good heavens!',
 ];
 let lastCallIndex = -1;
-let milestoneSpoken = false;  // tracks whether 100pt cue has fired this round
+let milestoneSpoken = false;
 let cachedVoices = [];
 let accentIndex = 0;
 
-// Accent pools — lots of variety, rotate each throw
 const ACCENT_POOLS = [
-  // British
-  ['Daniel', 'Arthur', 'en-GB', 'British', 'Oliver'],
-  // Australian
-  ['Karen', 'Matilda', 'en-AU', 'Australian'],
-  // Canadian — en-CA, or fall back to US voices with a maple twist
-  ['en-CA', 'Samantha', 'Nathan', 'Nicky'],
-  // Southern US / country twang
-  ['Zira', 'en-US', 'Alex', 'Tom', 'Samantha'],
-  // Irish
-  ['Moira', 'Fiona', 'en-IE', 'Irish'],
-  // Scottish
-  ['Fiona', 'en-GB-scotland', 'en-GB', 'Malcolm'],
-  // Indian
-  ['Rishi', 'en-IN', 'Veena', 'Lekha'],
-  // Japanese / East Asian fallback
-  ['Kyoko', 'O-Ren', 'en-US', 'Ava', 'Allison'],
-  // Deep south / Texan — just US voices with exaggerated pitch
-  ['en-US', 'Tom', 'Alex', 'Fred'],
-  // French Canadian
-  ['Amelie', 'fr-CA', 'Thomas', 'en-CA'],
+  ['Daniel', 'Arthur', 'en-GB'],
+  ['Karen', 'Matilda', 'en-AU'],
+  ['en-CA', 'Samantha', 'Nathan'],
+  ['Zira', 'en-US', 'Alex', 'Tom'],
+  ['Moira', 'Fiona', 'en-IE'],
+  ['Fiona', 'en-GB'],
+  ['Rishi', 'en-IN', 'Veena'],
+  ['Kyoko', 'Ava', 'en-US'],
+  ['Fred', 'en-US', 'Tom'],
+  ['Amelie', 'fr-CA', 'en-CA'],
 ];
-
-// Per-pool pitch/rate modifiers to make each accent feel distinct and silly
 const ACCENT_MODS = [
-  { rate: [0.88, 0.96], pitch: [0.85, 1.0]  },  // British — measured, low
-  { rate: [1.05, 1.20], pitch: [1.0,  1.3]  },  // Australian — bright and fast
-  { rate: [0.90, 1.05], pitch: [0.90, 1.1]  },  // Canadian — pleasant, eh
-  { rate: [0.80, 0.92], pitch: [0.75, 0.95] },  // Country — slow drawl, low
-  { rate: [0.95, 1.10], pitch: [1.1,  1.4]  },  // Irish — lilting, high
-  { rate: [0.82, 0.95], pitch: [0.80, 1.0]  },  // Scottish — gruff
-  { rate: [1.0,  1.15], pitch: [1.0,  1.3]  },  // Indian — melodic
-  { rate: [1.1,  1.3],  pitch: [1.2,  1.6]  },  // East Asian — fast and high
-  { rate: [0.70, 0.85], pitch: [0.60, 0.80] },  // Texan — very slow, very low
-  { rate: [1.05, 1.2],  pitch: [1.1,  1.5]  },  // French Canadian — rapid, nasal
+  { rate:[0.88,0.96], pitch:[0.85,1.0]  },
+  { rate:[1.05,1.20], pitch:[1.0, 1.3]  },
+  { rate:[0.90,1.05], pitch:[0.90,1.1]  },
+  { rate:[0.80,0.92], pitch:[0.75,0.95] },
+  { rate:[0.95,1.10], pitch:[1.1, 1.4]  },
+  { rate:[0.82,0.95], pitch:[0.80,1.0]  },
+  { rate:[1.0, 1.15], pitch:[1.0, 1.3]  },
+  { rate:[1.1, 1.3],  pitch:[1.2, 1.6]  },
+  { rate:[0.70,0.85], pitch:[0.60,0.80] },
+  { rate:[1.05,1.2],  pitch:[1.1, 1.5]  },
 ];
 
 function rnd(a, b) { return a + Math.random() * (b - a); }
 
 function loadVoices() {
-  if (window.speechSynthesis) {
-    if (v.length) cachedVoices = v;
-  }
+  if (!window.speechSynthesis) return;
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length) cachedVoices = voices;
 }
 if (window.speechSynthesis) {
   window.speechSynthesis.onvoiceschanged = loadVoices;
   setTimeout(loadVoices, 100);
+  setTimeout(loadVoices, 800);
 }
 
 function pickVoice(hints) {
-  if (!cachedVoices.length) loadVoices();
+  loadVoices();
   for (const hint of hints) {
-    const v = cachedVoices.find(v => new RegExp(hint, 'i').test(v.name + ' ' + (v.lang||'')));
-    if (v) return v;
+    const found = cachedVoices.find(v => new RegExp(hint, 'i').test(v.name + ' ' + (v.lang||'')));
+    if (found) return found;
   }
-  return cachedVoices.length ? cachedVoices[Math.floor(Math.random() * cachedVoices.length)] : null;
+  return cachedVoices.find(v => /en/i.test(v.lang)) || cachedVoices[0] || null;
 }
 
 function speak(text, accentHints) {
   if (!window.speechSynthesis) return;
-  // Only cancel if something is already mid-speech (don't kill the unlock dummy)
-  if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  const poolIdx = accentHints ? 0 : (accentIndex % ACCENT_POOLS.length);
-  const hints = accentHints || ACCENT_POOLS[poolIdx];
-  const mods = ACCENT_MODS[accentHints ? 0 : poolIdx] || ACCENT_MODS[0];
-  utt.rate   = rnd(mods.rate[0],  mods.rate[1]);
-  utt.pitch  = rnd(mods.pitch[0], mods.pitch[1]);
-  utt.volume = 1.0;
-  const v = pickVoice(hints);
-  if (v) utt.voice = v;
-  // Small delay gives the browser time to process after unlock
-  setTimeout(() => window.speechSynthesis.speak(utt), 80);
+  try {
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    const poolIdx = accentHints ? 0 : (accentIndex % ACCENT_POOLS.length);
+    const hints = accentHints || ACCENT_POOLS[poolIdx];
+    const mods  = ACCENT_MODS[accentHints ? 0 : poolIdx] || ACCENT_MODS[0];
+    utt.rate   = rnd(mods.rate[0],  mods.rate[1]);
+    utt.pitch  = rnd(mods.pitch[0], mods.pitch[1]);
+    utt.volume = 1.0;
+    const voice = pickVoice(hints);
+    if (voice) utt.voice = voice;
+    setTimeout(() => { try { window.speechSynthesis.speak(utt); } catch(e) {} }, 60);
+  } catch(e) {}
 }
 
 function speakPotatoCall() {
   let idx;
-  do { idx = Math.floor(Math.random() * POTATO_CALLS.length); } while (idx === lastCallIndex && POTATO_CALLS.length > 1);
+  do { idx = Math.floor(Math.random() * POTATO_CALLS.length); }
+  while (idx === lastCallIndex && POTATO_CALLS.length > 1);
   lastCallIndex = idx;
   accentIndex++;
   speak(POTATO_CALLS[idx]);
@@ -412,7 +401,6 @@ function unlockAudio() {
   try {
     const ac = getAudio();
     if (!ac) return;
-    // Silent buffer trick required by iOS Safari
     const buf = ac.createBuffer(1, 1, 22050);
     const src = ac.createBufferSource();
     src.buffer = buf;
@@ -420,14 +408,9 @@ function unlockAudio() {
     src.start(0);
     ac.resume().then(() => { audioUnlocked = true; });
   } catch(e) {}
-  // Also prime speech synthesis with a real but inaudible utterance
-  if (window.speechSynthesis) {
-    const dummy = new SpeechSynthesisUtterance('.');
-    dummy.volume = 0.01;
-    dummy.rate = 2;
-    dummy.onend = () => { /* queue is open */ };
-    try { window.speechSynthesis.cancel(); window.speechSynthesis.speak(dummy); } catch(e) {}
-  }
+  // Load voices now that we have a user gesture
+  loadVoices();
+  setTimeout(loadVoices, 300);
 }
 
 function playThud(x) {
